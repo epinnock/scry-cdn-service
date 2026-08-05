@@ -69,8 +69,11 @@ async function fetchProjectFromFirestore(
   const firebaseProjectId = env.FIREBASE_PROJECT_ID;
 
   if (!firebaseProjectId) {
+    // Throw rather than return null. Returning null would report every project
+    // as "not found", letting one missing binding decide access for every
+    // project. Throwing routes into the caller's catch, which fails closed.
     console.error("[VISIBILITY] FIREBASE_PROJECT_ID not configured");
-    return null;
+    throw new Error("FIREBASE_PROJECT_ID not configured");
   }
 
   const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/projects/${projectId}`;

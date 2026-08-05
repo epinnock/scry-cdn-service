@@ -116,12 +116,16 @@ describe('privateProjectAuth middleware', () => {
     expect(res.status).toBe(200);
   });
 
-  it('passes through when project not found', async () => {
+  // Previously this expected 200 — a project with no Firestore document served
+  // its entire hosted Storybook to anyone, unauthenticated. A missing record is
+  // an unknown project, not a public one. Transient Firestore failures do not
+  // produce null; getProjectVisibility() maps those to private/no-members.
+  it('denies access when project not found', async () => {
     (getProjectVisibility as any).mockResolvedValue(null);
 
     const req = new Request('https://view.scrymore.com/nonexistent/v1/index.html');
     const res = await app.fetch(req, mockEnv as any);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(404);
   });
 });
