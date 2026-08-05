@@ -32,11 +32,16 @@ export async function privateProjectAuth(
   const project = await getProjectVisibility(projectId, c.env);
 
   if (!project) {
+    // No Firestore document means an unknown project, not an open one. This
+    // previously called next(), which served the entire hosted Storybook for any
+    // project_id lacking a record — to unauthenticated callers. Transient
+    // Firestore failures never reach here: getProjectVisibility() converts them
+    // to { visibility: "private", memberIds: [] }, so null is specifically a 404.
     console.info(
-      "[AUTH] Project not found in Firestore, allowing access:",
+      "[AUTH] Project not found in Firestore, denying access:",
       projectId,
     );
-    return next();
+    return c.text("Not found", 404);
   }
 
   console.info("[AUTH] Project visibility:", {
