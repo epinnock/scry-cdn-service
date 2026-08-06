@@ -176,8 +176,9 @@ describe('version names outside the old allowlist (ISSUES.md #3)', () => {
     'feature-branch-x',
   ])('treats %s as a version', (version) => {
     const info = parsePathForUUID(`/proj123/${version}/index.html`);
-    expect(info?.resolution?.version).toBe(version);
-    expect(info?.resolution?.zipKey).toBe(`proj123/${version}/storybook.zip`);
+    const resolution = info?.resolution as CompoundUUID;
+    expect(resolution.version).toBe(version);
+    expect(resolution.zipKey).toBe(`proj123/${version}/storybook.zip`);
     expect(info?.filePath).toBe('index.html');
   });
 
@@ -189,13 +190,15 @@ describe('version names outside the old allowlist (ISSUES.md #3)', () => {
     'styles.css',
   ])('still treats %s as a file, not a version', (file) => {
     const info = parsePathForUUID(`/proj123/${file}`);
-    expect(info?.resolution?.version).toBe('');
+    const resolution = info?.resolution as CompoundUUID;
+    expect(resolution.version).toBe('');
     expect(info?.filePath).toBe(file);
   });
 
   // Dotted versions must survive the filename heuristic.
   it.each(['v1.2.3', 'v0.0.0.1', 'v2026.08.03'])('keeps %s a version', (v) => {
-    expect(parsePathForUUID(`/proj123/${v}/index.html`)?.resolution?.version).toBe(v);
+    const resolution = parsePathForUUID(`/proj123/${v}/index.html`)?.resolution as CompoundUUID;
+    expect(resolution.version).toBe(v);
   });
 });
 
