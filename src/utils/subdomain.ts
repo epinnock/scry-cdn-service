@@ -56,16 +56,26 @@ function isVersionSegment(segment: string): boolean {
   // Minimum length check
   if (segment.length < 2) return false;
 
-  // Match common version patterns:
-  // 1. Starts with 'v' followed by version number (v1.0.0, v0.0.0.1)
-  // 2. PR format (pr-001, pr-123)
-  // 3. Dev format (dev-123, dev-snapshot-456)
-  // 4. Common identifiers (beta, alpha, canary, rc)
-  // 5. Environment names (staging, latest, main, production)
+  // Well-known shapes first. These are checked before the filename heuristic
+  // below because dotted versions (v1.2.3, v0.0.0.1) would otherwise look like
+  // they carry a file extension.
   const commonPatterns =
     /^(v[\d.-]+|pr-\d+|dev-[\w-]+|beta[\w-]*|alpha[\w-]*|canary[\w-]*|rc-?\d*|staging|latest|main|production)$/i;
+  if (commonPatterns.test(segment)) return true;
 
-  return commonPatterns.test(segment);
+  // Anything else carrying a file extension is a filename, not a version:
+  // /{project}/{file.ext} must not read its file as a version.
+  if (/\.[A-Za-z0-9]{1,8}$/.test(segment)) return false;
+
+  // Otherwise accept any plausible version label. Deploy versions are
+  // user-chosen strings, and an allowlist silently reinterpreted every name
+  // outside it as a filename — dropping the version from the R2 key and
+  // returning 500 for a perfectly healthy build. The runbook's own
+  // "aug3-demo-20260803" could never resolve (ISSUES.md #3).
+  //
+  // Deliberately excludes segments containing '.' so that a dotted filename
+  // without a recognised extension still reads as a file.
+  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(segment);
 }
 
 /**
