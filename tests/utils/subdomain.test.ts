@@ -164,6 +164,41 @@ describe('subdomain path parsing with flexible versions', () => {
   });
 });
 
+describe('version names outside the old allowlist (ISSUES.md #3)', () => {
+  // The allowlist silently reinterpreted any unrecognised version as a
+  // *filename*, dropping it from the R2 key and returning 500 for a perfectly
+  // healthy build. The runbook's own prescribed version could never resolve.
+  it.each([
+    'aug3-demo-20260803',
+    'release-2026-08-03',
+    'demo',
+    'build-42',
+    'feature-branch-x',
+  ])('treats %s as a version', (version) => {
+    const info = parsePathForUUID(`/proj123/${version}/index.html`);
+    expect(info?.resolution?.version).toBe(version);
+    expect(info?.resolution?.zipKey).toBe(`proj123/${version}/storybook.zip`);
+    expect(info?.filePath).toBe('index.html');
+  });
+
+  // The discriminator that must keep working: a filename is not a version.
+  it.each([
+    'index.html',
+    'placeholder.svg',
+    'main.js',
+    'styles.css',
+  ])('still treats %s as a file, not a version', (file) => {
+    const info = parsePathForUUID(`/proj123/${file}`);
+    expect(info?.resolution?.version).toBe('');
+    expect(info?.filePath).toBe(file);
+  });
+
+  // Dotted versions must survive the filename heuristic.
+  it.each(['v1.2.3', 'v0.0.0.1', 'v2026.08.03'])('keeps %s a version', (v) => {
+    expect(parsePathForUUID(`/proj123/${v}/index.html`)?.resolution?.version).toBe(v);
+  });
+});
+
 describe('extractProjectFromReferer', () => {
   it('extracts projectId and versionId from a valid Referer', () => {
     const result = extractProjectFromReferer('https://view.scrymore.com/TjYmKAiAQuIdYFlBnVOa/main/iframe.html');

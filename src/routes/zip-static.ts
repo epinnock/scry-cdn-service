@@ -180,6 +180,15 @@ zipStaticRoutes.get("/*", async (c) => {
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
+    // A build that was never uploaded is not a server fault. Reporting 500
+    // made an absent version indistinguishable from a corrupt one, which sent
+    // an entire debugging session looking for a broken build that did not
+    // exist (ISSUES.md #7).
+    const message = error instanceof Error ? error.message : String(error);
+    if (/ZIP file not found/i.test(message)) {
+      return c.text("Not found", 404);
+    }
+
     return c.text("Internal Server Error", 500);
   }
 });
