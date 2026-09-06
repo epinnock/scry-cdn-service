@@ -98,7 +98,9 @@ export function corsHeaders(
   const headers = new Headers();
 
   const allowMethods = config.allowMethods ?? "GET, HEAD, OPTIONS";
-  const allowHeaders = config.allowHeaders ?? "Content-Type, Accept, Cookie";
+  // Authorization: the Figma plugin sends its Scry PAT as a bearer for private projects.
+  const allowHeaders =
+    config.allowHeaders ?? "Content-Type, Accept, Cookie, Authorization";
   const maxAgeSeconds = config.maxAgeSeconds ?? 86400;
   const allowCredentials = config.allowCredentials ?? true; // Default to true for private project support
 
