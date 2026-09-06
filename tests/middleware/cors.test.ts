@@ -72,7 +72,7 @@ describe('CORS middleware', () => {
       const headers = corsHeaders(req);
 
       expect(headers.get('Access-Control-Allow-Methods')).toBe('GET, HEAD, OPTIONS');
-      expect(headers.get('Access-Control-Allow-Headers')).toBe('Content-Type, Accept, Cookie');
+      expect(headers.get('Access-Control-Allow-Headers')).toBe('Content-Type, Accept, Cookie, Authorization');
       expect(headers.get('Access-Control-Max-Age')).toBe('86400');
     });
   });

@@ -5,6 +5,7 @@ import {
   validateFirebaseSessionCookie,
 } from "@/auth/firebase-session";
 import { getProjectVisibility, isProjectMember } from "@/services/visibility";
+import { isScryPat, verifyScryPat } from "@/auth/scry-pat";
 
 const SESSION_COOKIE_NAME = "__session";
 
@@ -56,7 +57,34 @@ export async function privateProjectAuth(
     return next();
   }
 
-  // Private project - check authentication
+  // Private project - check authentication.
+  //
+  // Bearer path first: the Figma plugin (sandboxed iframe, origin "null") cannot
+  // send cookies but does hold a Scry PAT. A presented PAT is authoritative —
+  // an invalid one is a 401, it never falls through to the cookie path.
+  const authorization = c.req.header("Authorization");
+  if (authorization?.startsWith("Bearer ")) {
+    const bearer = authorization.slice("Bearer ".length).trim();
+    if (isScryPat(bearer)) {
+      const pat = await verifyScryPat(bearer, c.env);
+      if (!pat) {
+        console.warn(
+          "[AUTH] Rejected Scry PAT for private project:",
+          projectId,
+        );
+        return c.text("Unauthorized", 401);
+      }
+      if (!isProjectMember(project.memberIds, pat.uid)) {
+        console.warn("[AUTH] PAT owner is not a project member:", {
+          uid: pat.uid,
+          projectId,
+        });
+        return c.text("Forbidden", 403);
+      }
+      return next();
+    }
+  }
+
   const cookieHeader = c.req.header("Cookie");
   console.info("[AUTH] Cookie header present:", !!cookieHeader);
 
