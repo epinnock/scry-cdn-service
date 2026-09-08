@@ -6,8 +6,29 @@ import {
 } from "@/auth/firebase-session";
 import { getProjectVisibility, isProjectMember } from "@/services/visibility";
 import { isScryPat, verifyScryPat } from "@/auth/scry-pat";
+import {
+  PREVIEW_COOKIE_NAME,
+  PREVIEW_QUERY_PARAM,
+  previewCookie,
+  verifyPreviewToken,
+} from "@/auth/preview-token";
 
 const SESSION_COOKIE_NAME = "__session";
+
+/**
+ * HTML of a private project must not hand its URL to other origins: the
+ * Storybook's own asset requests (same origin) keep a full Referer — the
+ * absolute-path redirect in app.ts depends on it — while anything it loads
+ * from a third party gets none at all.
+ */
+const PRIVATE_HTML_REFERRER_POLICY = "same-origin";
+
+async function servePrivate(c: Context<{ Bindings: Env }>, next: Next) {
+  await next();
+  if (c.res.headers.get("Content-Type")?.includes("text/html")) {
+    c.res.headers.set("Referrer-Policy", PRIVATE_HTML_REFERRER_POLICY);
+  }
+}
 
 export interface AuthContext {
   uid?: string;
@@ -81,14 +102,60 @@ export async function privateProjectAuth(
         });
         return c.text("Forbidden", 403);
       }
-      return next();
+      return servePrivate(c, next);
     }
+  }
+
+  // Signed preview token (in-plugin previews of private Storybooks — see
+  // docs/PRIVATE_PREVIEW_SIGNED_COOKIES.md). The first iframe navigation
+  // carries `?scry_preview=<token>`; a valid one is exchanged for a
+  // partitioned, path-scoped cookie and redirected to the same URL without the
+  // parameter, so the token never sits in the address bar or a Referer. Like
+  // the PAT, a presented token is authoritative: an invalid one is a 401.
+  const previewParam = url.searchParams.get(PREVIEW_QUERY_PARAM);
+  if (previewParam !== null) {
+    const verified = await verifyPreviewToken(previewParam, projectId, c.env);
+    if (!verified) {
+      console.warn("[AUTH] Rejected preview token for project:", projectId);
+      return c.text("Unauthorized", 401);
+    }
+    url.searchParams.delete(PREVIEW_QUERY_PARAM);
+    console.info("[AUTH] Preview token exchanged for cookie:", {
+      uid: verified.uid,
+      projectId,
+      remainingSeconds: verified.remainingSeconds,
+    });
+    c.header("Set-Cookie", previewCookie(previewParam, verified));
+    c.header("Cache-Control", "no-store");
+    return c.redirect(url.pathname + url.search, 302);
   }
 
   const cookieHeader = c.req.header("Cookie");
   console.info("[AUTH] Cookie header present:", !!cookieHeader);
 
   const cookies = parseCookies(cookieHeader ?? null);
+
+  // Every sub-request of an exchanged preview carries the cookie. Verifying it
+  // is pure CPU, so it goes before the session cookie (a JWT check against
+  // Google's keys). A stale one is simply ignored — a first-party visitor with
+  // a leftover partitioned cookie still gets the session path.
+  const previewCookieValue = cookies[PREVIEW_COOKIE_NAME];
+  if (previewCookieValue) {
+    const verified = await verifyPreviewToken(
+      previewCookieValue,
+      projectId,
+      c.env,
+    );
+    if (verified) {
+      console.info("[AUTH] Preview cookie accepted:", {
+        uid: verified.uid,
+        projectId,
+      });
+      return servePrivate(c, next);
+    }
+    console.info("[AUTH] Preview cookie invalid or expired:", projectId);
+  }
+
   const sessionCookie = cookies[SESSION_COOKIE_NAME];
 
   console.info("[AUTH] Session cookie present:", !!sessionCookie);
@@ -154,5 +221,5 @@ export async function privateProjectAuth(
 
   console.info("[AUTH] Access granted:", { uid: validation.uid, projectId });
 
-  return next();
+  return servePrivate(c, next);
 }

@@ -442,9 +442,30 @@ async createBuild(projectId: string, userId: string, data: CreateBuildData) {
 ## Security
 
 - CORS configured per environment
-- No authentication on static files (public CDN)
+- Public projects are served without authentication
 - Files isolated by UUID namespace
 - Optional rate limiting (add middleware)
+
+### Private projects
+
+`privateProjectAuth` (`src/middleware/auth.ts`) looks the project up in
+Firestore (`visibility`, `memberIds`; cached in KV) and, for a private one,
+accepts any of three credentials:
+
+| Credential | Who sends it | Checked by |
+|---|---|---|
+| `__session` cookie (Firebase session) | Dashboard users in the browser | Google's public keys, then membership |
+| `Authorization: Bearer scry_pat_…` (Scry PAT) | The Figma plugin's API calls | `users/{uid}/personalAccessTokens` by hash, then membership |
+| `?scry_preview=<token>` → `__scry_preview` cookie | The plugin's preview `<iframe>` | HMAC with `PREVIEW_TOKEN_SECRET`, project + expiry — no Firestore call |
+
+The preview token is minted by the dashboard (`POST /api/projects/:id/preview-token`,
+membership checked there, ≤ 10 minutes). On the first navigation the CDN
+exchanges it for a `Partitioned; SameSite=None; Path=/<projectId>/` cookie and
+302s to the same URL without the parameter; every later asset request carries
+the cookie. Set `PREVIEW_TOKEN_SECRET` (and, while rotating,
+`PREVIEW_TOKEN_SECRET_PREVIOUS`) with `wrangler secret put` — without it the
+parameter is rejected. Design and browser caveats:
+[docs/PRIVATE_PREVIEW_SIGNED_COOKIES.md](docs/PRIVATE_PREVIEW_SIGNED_COOKIES.md).
 
 ## Troubleshooting
 

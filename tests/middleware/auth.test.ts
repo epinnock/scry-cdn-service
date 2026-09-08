@@ -19,6 +19,7 @@ vi.mock('@/auth/scry-pat', () => ({
 import { getProjectVisibility, isProjectMember } from '@/services/visibility';
 import { validateFirebaseSessionCookie, parseCookies } from '@/auth/firebase-session';
 import { verifyScryPat } from '@/auth/scry-pat';
+import { signPreviewToken } from '../auth/preview-token.test';
 
 describe('privateProjectAuth middleware', () => {
   let app: Hono;
@@ -192,6 +193,170 @@ describe('privateProjectAuth middleware', () => {
       const res = await app.fetch(req, mockEnv as any);
       expect(res.status).toBe(200);
       expect(verifyScryPat).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signed preview token (in-plugin previews)', () => {
+    const SECRET = 'cdn-test-secret-0123456789abcdef0123456789abcdef';
+    const PREVIOUS = 'cdn-previous-secret-0123456789abcdef0123456789ab';
+    const PROJECT = 'private-project';
+    const privateProject = { visibility: 'private', memberIds: ['user-123'] };
+    const env = { ...mockEnv, PREVIEW_TOKEN_SECRET: SECRET };
+    const realParseCookies = (header: string | null) => {
+      const out: Record<string, string> = {};
+      for (const part of (header ?? '').split(';')) {
+        const [k, ...v] = part.split('=');
+        if (k?.trim()) out[k.trim()] = v.join('=').trim();
+      }
+      return out;
+    };
+
+    const mint = (overrides: Record<string, unknown> = {}, secret = SECRET) =>
+      signPreviewToken(
+        { v: 1, uid: 'user-123', projectId: PROJECT, exp: Math.floor(Date.now() / 1000) + 600, nonce: 'n', ...overrides },
+        secret,
+      );
+
+    beforeEach(() => {
+      (getProjectVisibility as any).mockResolvedValue(privateProject);
+      (parseCookies as any).mockImplementation(realParseCookies);
+      app = new Hono();
+      app.use('/*', privateProjectAuth);
+      app.get('/*', (c) => {
+        if (c.req.path.endsWith('.html')) return c.html('<!doctype html><p>story</p>');
+        return c.text('OK');
+      });
+    });
+
+    it('exchanges a valid ?scry_preview for a partitioned, path-scoped cookie and redirects without the parameter', async () => {
+      const token = await mint();
+      const req = new Request(`https://view.scrymore.com/${PROJECT}/v2/iframe.html?id=button--primary&viewMode=story&scry_preview=${token}`);
+      const res = await app.fetch(req, env as any);
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location')).toBe(`/${PROJECT}/v2/iframe.html?id=button--primary&viewMode=story`);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      const cookie = res.headers.get('Set-Cookie')!;
+      expect(cookie.startsWith(`__scry_preview=${token}; `)).toBe(true);
+      expect(cookie).toContain(`Path=/${PROJECT}/`);
+      for (const attr of ['Secure', 'HttpOnly', 'SameSite=None', 'Partitioned']) expect(cookie).toContain(attr);
+      const maxAge = Number(/Max-Age=(\d+)/.exec(cookie)![1]);
+      expect(maxAge).toBeGreaterThan(590);
+      expect(maxAge).toBeLessThanOrEqual(600);
+      expect(validateFirebaseSessionCookie).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 for an expired token, a token for another project, and a bad signature', async () => {
+      const cases = [
+        await mint({ exp: Math.floor(Date.now() / 1000) - 5 }),
+        await mint({ projectId: 'some-other-project' }),
+        await mint({}, 'wrong-secret'),
+        'garbage',
+      ];
+      for (const token of cases) {
+        const req = new Request(`https://view.scrymore.com/${PROJECT}/v2/iframe.html?scry_preview=${token}`);
+        const res = await app.fetch(req, env as any);
+        expect(res.status, token).toBe(401);
+        expect(res.headers.get('Set-Cookie')).toBeNull();
+      }
+    });
+
+    it('admits every request carrying a valid cookie, with no Firestore or Google round-trip', async () => {
+      const token = await mint();
+      for (const path of ['iframe.html', 'index.json', 'assets/chunk-abc.js']) {
+        const req = new Request(`https://view.scrymore.com/${PROJECT}/v2/${path}`, {
+          headers: { Cookie: `__scry_preview=${token}` },
+        });
+        const res = await app.fetch(req, env as any);
+        expect(res.status, path).toBe(200);
+      }
+      expect(validateFirebaseSessionCookie).not.toHaveBeenCalled();
+      expect(verifyScryPat).not.toHaveBeenCalled();
+    });
+
+    it('scopes the cookie to its project: another private project rejects it', async () => {
+      const token = await mint();
+      (getProjectVisibility as any).mockResolvedValue({ visibility: 'private', memberIds: ['user-123'] });
+      const req = new Request('https://view.scrymore.com/another-private/v1/index.json', {
+        headers: { Cookie: `__scry_preview=${token}` },
+      });
+      const res = await app.fetch(req, env as any);
+      expect(res.status).toBe(401);
+    });
+
+    it('falls back to the session cookie when the preview cookie is stale', async () => {
+      const stale = await mint({ exp: Math.floor(Date.now() / 1000) - 5 });
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123' });
+      (isProjectMember as any).mockReturnValue(true);
+      const req = new Request(`https://view.scrymore.com/${PROJECT}/v2/index.json`, {
+        headers: { Cookie: `__scry_preview=${stale}; __session=valid-session` },
+      });
+      const res = await app.fetch(req, env as any);
+      expect(res.status).toBe(200);
+      expect(validateFirebaseSessionCookie).toHaveBeenCalledWith('valid-session', expect.anything(), expect.anything());
+    });
+
+    it('accepts a token signed with the previous secret during rotation', async () => {
+      const token = await mint({}, PREVIOUS);
+      const rotating = { ...env, PREVIEW_TOKEN_SECRET_PREVIOUS: PREVIOUS };
+      const exchange = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/iframe.html?scry_preview=${token}`),
+        rotating as any,
+      );
+      expect(exchange.status).toBe(302);
+      const withCookie = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/index.json`, { headers: { Cookie: `__scry_preview=${token}` } }),
+        rotating as any,
+      );
+      expect(withCookie.status).toBe(200);
+      const noPrevious = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/index.json`, { headers: { Cookie: `__scry_preview=${token}` } }),
+        env as any,
+      );
+      expect(noPrevious.status).toBe(401);
+    });
+
+    it('rejects everything when no secret is configured', async () => {
+      const token = await mint();
+      const res = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/iframe.html?scry_preview=${token}`),
+        mockEnv as any,
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it('leaves public projects untouched: no exchange, no cookie, the parameter is ignored', async () => {
+      (getProjectVisibility as any).mockResolvedValue({ visibility: 'public', memberIds: [] });
+      const token = await mint({ projectId: 'public-project' });
+      const res = await app.fetch(
+        new Request(`https://view.scrymore.com/public-project/v2/iframe.html?scry_preview=${token}`),
+        env as any,
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Set-Cookie')).toBeNull();
+      expect(res.headers.get('Referrer-Policy')).toBeNull();
+    });
+
+    it('adds Referrer-Policy: same-origin to HTML of private projects only', async () => {
+      const token = await mint();
+      const html = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/iframe.html`, { headers: { Cookie: `__scry_preview=${token}` } }),
+        env as any,
+      );
+      expect(html.status).toBe(200);
+      expect(html.headers.get('Referrer-Policy')).toBe('same-origin');
+      const json = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/index.json`, { headers: { Cookie: `__scry_preview=${token}` } }),
+        env as any,
+      );
+      expect(json.headers.get('Referrer-Policy')).toBeNull();
+      // The session path gets it too — it is a property of private HTML, not of the credential.
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123' });
+      (isProjectMember as any).mockReturnValue(true);
+      const viaSession = await app.fetch(
+        new Request(`https://view.scrymore.com/${PROJECT}/v2/iframe.html`, { headers: { Cookie: '__session=valid-session' } }),
+        env as any,
+      );
+      expect(viaSession.headers.get('Referrer-Policy')).toBe('same-origin');
     });
   });
 });

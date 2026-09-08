@@ -1,6 +1,9 @@
 # Part 4 design: in-plugin previews of private Storybooks (signed URL → partitioned cookie)
 
-**Status: designed, not built (2026-09-06).** Parts 1–3 (project Storybook URLs
+**Status: built (2026-09-08) — CDN side in this repo (deployed to
+`scry-cdn-service-dev`; production awaits go-ahead), dashboard endpoint in
+scry-developer-dashboard, plugin side in scry-link. See "What was built" at
+the end.** Parts 1–3 (project Storybook URLs
 in `/api/projects?include=storybookUrl`, an honest project picker in the plugin,
 and Scry PAT bearer auth on this CDN for private projects) let the Figma plugin
 list and link stories of private projects. What they do not give is a *preview*
@@ -90,3 +93,56 @@ with explicit go-ahead (this Worker serves every Storybook).
 The same signed-URL exchange lets *any* embed of a private Storybook work
 without a dashboard session — share links, agent screenshots, MCP fetches — so
 it is worth building as a CDN primitive rather than a plugin special case.
+
+## What was built (2026-09-08)
+
+**scry-cdn-service** (`feat/private-preview-signed-cookie`)
+
+- `src/auth/preview-token.ts` — `verifyPreviewToken(token, projectId, env)`:
+  token is `base64url(JSON payload) "." base64url(HMAC-SHA256(secret, payloadB64))`
+  over `{ v: 1, uid, projectId, exp, nonce }` (`exp` in unix seconds), verified
+  with WebCrypto against `PREVIEW_TOKEN_SECRET` and, if set,
+  `PREVIEW_TOKEN_SECRET_PREVIOUS`. Rejects: bad/missing signature, malformed or
+  wrong-shaped payload, another project, expired, or an `exp` more than
+  10 min (+60 s skew) away. No secret configured → everything rejected.
+  `previewCookie()` builds `__scry_preview=<token>; Path=/<projectId>/; Secure;
+  HttpOnly; SameSite=None; Partitioned; Max-Age=<remaining>`.
+- `src/middleware/auth.ts` — on a private project, after the PAT bearer and
+  before the session cookie: `?scry_preview=<token>` present → verify (401 if
+  invalid) → `Set-Cookie` as above + `Cache-Control: no-store` + `302` to the
+  same URL minus the parameter. A `__scry_preview` cookie that verifies admits
+  the request with no Firestore/Google round-trip; a stale one is ignored and
+  the session path still runs. Public projects never look at either.
+- `Referrer-Policy` on private-project HTML is **`same-origin`**, not the
+  `no-referrer` written above: after the exchange the token is never in a
+  document URL, so both values keep it out of every Referer — but
+  `no-referrer` would also strip the same-origin Referer that the CDN's
+  absolute-asset-path redirect (`app.ts`, PRs #13/#15/#16) relies on, breaking
+  `src="/hero.png"`-style assets on private Storybooks. `same-origin` keeps
+  that working and still sends nothing to third parties.
+- Tests: `tests/auth/preview-token.test.ts` (verifier + reference signer) and
+  `tests/middleware/auth.test.ts` "signed preview token" (exchange, 401 cases,
+  cookie path scoping, stale-cookie fallback, previous secret, no secret,
+  public untouched, Referrer-Policy). Secret lives only in the Worker
+  (`wrangler secret put PREVIEW_TOKEN_SECRET --env <env>`) and a gitignored
+  `.secrets.<env>.json`.
+
+**scry-developer-dashboard** — `POST /api/projects/[id]/preview-token`
+(Bearer Scry PAT or Firebase id token via `verifyToken`, owner/member check,
+503 when `PREVIEW_TOKEN_SECRET` is unset) returns
+`{ token, expiresAt, storybookUrl }` (10-minute `exp`, random nonce,
+`storybookUrl` of the newest active build or null). Added to the plugin CORS
+matcher in `middleware.ts`. `lib/api/preview-token.ts` holds the signer.
+
+**scry-link** — `mintPreviewToken(token, projectId)` in `src/lib/scry-api.ts`;
+`StoryPreview` takes `previewToken` and, for a private project with a
+signed-in user, renders
+`<iframe src="<storybookUrl>/iframe.html?id=<story>&viewMode=story&scry_preview=<token>">`.
+`App` mints when a preview of a private project opens and re-mints after
+`expiresAt`; "Open in browser" stays; signed-out or a failed mint shows the
+previous hand-off text (also on the embed-failed path).
+
+**Rollout.** CDN dev Worker deployed from the branch with the secret set;
+Vercel Preview + Production carry the same `PREVIEW_TOKEN_SECRET`. Production
+CDN: set the secret, then deploy — the plugin's private previews 401 (as
+today) until both are done.

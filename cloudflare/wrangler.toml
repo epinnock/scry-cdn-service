@@ -85,6 +85,9 @@ preview_id = "a67fa5bbfdaf462394e802bb08ca9247"
 # - FIREBASE_API_KEY
 # - FIREBASE_CLIENT_EMAIL (service account email for Firestore auth)
 # - FIREBASE_PRIVATE_KEY (service account private key for Firestore auth)
+# - PREVIEW_TOKEN_SECRET (HMAC secret shared with the dashboard; signed preview
+#   tokens for private projects — docs/PRIVATE_PREVIEW_SIGNED_COOKIES.md)
+# - PREVIEW_TOKEN_SECRET_PREVIOUS (optional, the retiring secret during rotation)
 
 # Observability configuration
 [observability]
