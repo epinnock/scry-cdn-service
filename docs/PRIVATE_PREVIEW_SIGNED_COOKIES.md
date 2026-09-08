@@ -96,7 +96,8 @@ it is worth building as a CDN primitive rather than a plugin special case.
 
 ## What was built (2026-09-08)
 
-**scry-cdn-service** (`feat/private-preview-signed-cookie`)
+**scry-cdn-service** — PR #21, merged as `2deca774` (`[skip ci]`, so the
+push-to-main workflow did not deploy production).
 
 - `src/auth/preview-token.ts` — `verifyPreviewToken(token, projectId, env)`:
   token is `base64url(JSON payload) "." base64url(HMAC-SHA256(secret, payloadB64))`
@@ -127,14 +128,16 @@ it is worth building as a CDN primitive rather than a plugin special case.
   (`wrangler secret put PREVIEW_TOKEN_SECRET --env <env>`) and a gitignored
   `.secrets.<env>.json`.
 
-**scry-developer-dashboard** — `POST /api/projects/[id]/preview-token`
+**scry-developer-dashboard** — PR #92, merged as `3571bf55` (live on
+dashboard.scrymore.com since 2026-09-08 21:08 UTC). `POST /api/projects/[id]/preview-token`
 (Bearer Scry PAT or Firebase id token via `verifyToken`, owner/member check,
 503 when `PREVIEW_TOKEN_SECRET` is unset) returns
 `{ token, expiresAt, storybookUrl }` (10-minute `exp`, random nonce,
 `storybookUrl` of the newest active build or null). Added to the plugin CORS
 matcher in `middleware.ts`. `lib/api/preview-token.ts` holds the signer.
 
-**scry-link** — `mintPreviewToken(token, projectId)` in `src/lib/scry-api.ts`;
+**scry-link** — PR #40, merged as `4e34ad0c` (not yet published to Figma;
+`build/` is gitignored, the user rebuilds locally). `mintPreviewToken(token, projectId)` in `src/lib/scry-api.ts`;
 `StoryPreview` takes `previewToken` and, for a private project with a
 signed-in user, renders
 `<iframe src="<storybookUrl>/iframe.html?id=<story>&viewMode=story&scry_preview=<token>">`.
@@ -142,7 +145,65 @@ signed-in user, renders
 `expiresAt`; "Open in browser" stays; signed-out or a failed mint shows the
 previous hand-off text (also on the embed-failed path).
 
-**Rollout.** CDN dev Worker deployed from the branch with the secret set;
-Vercel Preview + Production carry the same `PREVIEW_TOKEN_SECRET`. Production
-CDN: set the secret, then deploy — the plugin's private previews 401 (as
-today) until both are done.
+**Rollout.** `scry-cdn-service-dev` runs the merged code with
+`PREVIEW_TOKEN_SECRET` set (stored only in the gitignored
+`.secrets.development.json`); Vercel Preview + Production carry the same
+value. **Production CDN is untouched**: it needs the secret
+(`cd cloudflare && wrangler secret put PREVIEW_TOKEN_SECRET --env production`)
+and a deploy (`wrangler deploy --env production`, or any push to `main`,
+which the workflow deploys). Until then a private preview 401s inside the
+plugin's iframe exactly as a token-less one would, and "Open" still works.
+
+## Verification against `scry-cdn-service-dev` (2026-09-08)
+
+The dev Worker reads the **stage** Firestore, whose only project with a build
+is `ZGJ3UPwvmKtR9j3eAqaQ` (`pr-996`); it was set `visibility: private` there
+for the test and restored afterwards. `<TOKEN>` redacted. First with a
+token from the reference signer against the dev secret; then, once #92 was
+live, with one minted by the production dashboard (same project id exists in
+both Firestores; membership checked in production, exchange on dev).
+
+```
+CDN=https://scry-cdn-service-dev.epinnock.workers.dev; P=ZGJ3UPwvmKtR9j3eAqaQ
+
+$ curl -o /dev/null -w '%{http_code}\n' "$CDN/$P/pr-996/iframe.html"
+401
+$ curl -c jar -o /dev/null -D - "$CDN/$P/pr-996/iframe.html?id=x&viewMode=story&scry_preview=<TOKEN>"
+HTTP/2 302
+location: /ZGJ3UPwvmKtR9j3eAqaQ/pr-996/iframe.html?id=x&viewMode=story
+cache-control: no-store
+set-cookie: __scry_preview=<TOKEN>; Path=/ZGJ3UPwvmKtR9j3eAqaQ/; Secure; HttpOnly; SameSite=None; Partitioned; Max-Age=599
+$ curl -b jar -o /dev/null -D - "$CDN/$P/pr-996/iframe.html?id=x&viewMode=story"
+HTTP/2 200
+content-type: text/html; charset=utf-8
+referrer-policy: same-origin
+$ curl -b jar -o /dev/null -w '%{http_code}\n' "$CDN/$P/pr-996/index.json"      # asset, with cookie
+200
+$ curl -o /dev/null -w '%{http_code}\n' "$CDN/$P/pr-996/index.json"              # asset, no cookie
+401
+$ curl -o /dev/null -w '%{http_code}\n' "$CDN/$P/pr-996/iframe.html?scry_preview=<EXPIRED>"
+401
+$ curl -o /dev/null -w '%{http_code}\n' "$CDN/$P/pr-996/iframe.html?scry_preview=<TOKEN for other-project>"
+401
+```
+
+End to end, production dashboard → dev CDN (2026-09-08 21:09 UTC):
+
+```
+DASH=https://dashboard.scrymore.com
+
+$ curl -X POST "$DASH/api/projects/$P/preview-token"                                   # no auth
+401
+$ curl -X POST "$DASH/api/projects/$P/preview-token" -H 'Authorization: Bearer <founder id token>'
+200  {"token":"<TOKEN 208 chars>","expiresAt":"2026-09-08T21:19:15.000Z","storybookUrl":"https://view.scrymore.com/ZGJ3UPwvmKtR9j3eAqaQ/v3/"}
+     payload: {"v":1,"uid":"p6Bc64ctJTbf7ws1W1cekBRbUs83","projectId":"ZGJ3UPwvmKtR9j3eAqaQ","exp":1788902355,"nonce":"<redacted>"}
+$ curl -c jar -D - "$CDN/$P/pr-996/iframe.html?id=x&viewMode=story&scry_preview=<TOKEN>"
+HTTP/2 302   location: /ZGJ3UPwvmKtR9j3eAqaQ/pr-996/iframe.html?id=x&viewMode=story   cache-control: no-store
+set-cookie: __scry_preview=<TOKEN>; Path=/ZGJ3UPwvmKtR9j3eAqaQ/; Secure; HttpOnly; SameSite=None; Partitioned; Max-Age=599
+$ curl -b jar -D - "$CDN/$P/pr-996/iframe.html?id=x&viewMode=story"
+HTTP/2 200   content-type: text/html; charset=utf-8   referrer-policy: same-origin
+$ curl -b jar "$CDN/$P/pr-996/index.json"    → 200        $ curl "$CDN/$P/pr-996/index.json"    → 401
+$ curl "$CDN/$P/pr-996/iframe.html"          → 401
+$ curl "$CDN/$P/pr-996/iframe.html?scry_preview=<TOKEN minted for BlJfujLJOl8AJ8Vkkjou>"   → 401   # wrong project
+$ curl "https://view.scrymore.com/$P/v2/iframe.html?scry_preview=<TOKEN>"                → 200   # prod CDN, no secret: parameter ignored, project public there
+```
