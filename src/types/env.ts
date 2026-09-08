@@ -16,6 +16,14 @@ export interface Env {
   FIREBASE_CLIENT_EMAIL?: string;
   FIREBASE_PRIVATE_KEY?: string;
 
+  /**
+   * HMAC secret shared with the dashboard for signed preview tokens
+   * (docs/PRIVATE_PREVIEW_SIGNED_COOKIES.md). Unset = the feature is off and
+   * `?scry_preview` is rejected. `_PREVIOUS` is accepted during a rotation.
+   */
+  PREVIEW_TOKEN_SECRET?: string;
+  PREVIEW_TOKEN_SECRET_PREVIOUS?: string;
+
   // Docker/R2 specific
   STORAGE_TYPE?: "r2" | "filesystem";
   STORAGE_PATH?: string;

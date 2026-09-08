@@ -51,3 +51,5 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 secrets/*
+# Per-environment Worker secrets (wrangler secret put / bulk); never committed
+.secrets.*
