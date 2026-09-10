@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 account_id = "f54b9c10de9d140756dbf449aa124f1e"
 # At the top level, after account_id
 [vars]
+SCRY_ENV = "dev"
 PLATFORM = "cloudflare"
 FIREBASE_PROJECT_ID = "scry-dev-dashboard"
 # Enable preview URLs for testing deployments
@@ -35,7 +36,7 @@ preview_bucket_name = "my-storybooks-staging"
 # Production environment
 [env.production]
 name = "scry-cdn-service"
-vars = { PLATFORM = "cloudflare", ENVIRONMENT = "production", FIREBASE_PROJECT_ID = "scry-dev-dashboard" }
+vars = { PLATFORM = "cloudflare", ENVIRONMENT = "production", SCRY_ENV = "production", FIREBASE_PROJECT_ID = "scry-dev-dashboard" }
 routes = [
   { pattern = "*.scrymore.com/*", zone_name = "scrymore.com" }
 ]
@@ -56,7 +57,7 @@ id = "8be50ecb14a4424fa2f8a61d35e1e827"
 # Development/Staging environment
 [env.development]
 name = "scry-cdn-service-dev"
-vars = { PLATFORM = "cloudflare", ENVIRONMENT = "development", FIREBASE_PROJECT_ID = "scry-dev-dashboard-stage" }
+vars = { PLATFORM = "cloudflare", ENVIRONMENT = "development", SCRY_ENV = "staging", FIREBASE_PROJECT_ID = "scry-dev-dashboard-stage" }
 
 [[env.development.r2_buckets]]
 binding = "STATIC_SITES"

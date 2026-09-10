@@ -18,6 +18,10 @@ on:
           - development
           - production
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test:
     name: Run Tests
@@ -53,7 +57,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: https://scry-cdn-service.epinnock.workers.dev
+      url: https://view.scrymore.com
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -66,11 +70,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install
+
+      - name: Set build timestamp
+        id: stamp
+        run: echo "built_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Workers (Production)
         uses: cloudflare/wrangler-action@v3
@@ -78,12 +86,33 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: cloudflare
-          command: deploy --env production
+          wranglerVersion: '4.99.0'
+          # command is parsed as arguments, so compute the timestamp in a shell above.
+          command: >-
+            deploy --env production
+            --var SCRY_COMMIT:${{ github.sha }}
+            --var SCRY_BRANCH:${{ github.ref_name }}
+            --var SCRY_BUILD_TIME:${{ steps.stamp.outputs.built_at }}
+            --var SCRY_DEPLOY_ID:${{ github.run_id }}
+            --var SCRY_ACTOR:${{ github.actor }}
+            --tag ${{ github.sha }}
+            --message "${{ github.ref_name }} ${{ github.actor }} run=${{ github.run_id }}"
 
       - name: Verify deployment
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
         run: |
-          sleep 5
-          curl -f https://scry-cdn-service.epinnock.workers.dev/health || echo "Health check pending..."
+          for attempt in {1..6}; do
+            if commit=$(curl -fsS https://view.scrymore.com/healthz | jq -er '.commit') && [ "$commit" = "$EXPECTED_COMMIT" ]; then
+              echo "Verified deployment: $commit"
+              exit 0
+            fi
+            echo "Deployment not verified (attempt $attempt/6)"
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
+          done
+          echo "::error::Production /healthz did not report commit $EXPECTED_COMMIT"
+          exit 1
 
   deploy-manual:
     name: Manual Deployment
@@ -104,11 +133,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install
+
+      - name: Set build timestamp
+        id: stamp
+        run: echo "built_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
@@ -116,18 +149,39 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: cloudflare
-          command: deploy --env ${{ github.event.inputs.environment }}
+          wranglerVersion: '4.99.0'
+          command: >-
+            deploy --env ${{ github.event.inputs.environment }}
+            --var SCRY_COMMIT:${{ github.sha }}
+            --var SCRY_BRANCH:${{ github.ref_name }}
+            --var SCRY_BUILD_TIME:${{ steps.stamp.outputs.built_at }}
+            --var SCRY_DEPLOY_ID:${{ github.run_id }}
+            --var SCRY_ACTOR:${{ github.actor }}
+            --tag ${{ github.sha }}
+            --message "${{ github.ref_name }} ${{ github.actor }} run=${{ github.run_id }}"
 
       - name: Set deployment URL
         id: url
         run: |
           if [ "${{ github.event.inputs.environment }}" == "production" ]; then
-            echo "url=https://scry-cdn-service.epinnock.workers.dev" >> $GITHUB_OUTPUT
+            echo "url=https://view.scrymore.com" >> $GITHUB_OUTPUT
           else
             echo "url=https://scry-cdn-service-dev.epinnock.workers.dev" >> $GITHUB_OUTPUT
           fi
 
       - name: Verify deployment
+        shell: bash
+        env:
+          HEALTH_URL: ${{ steps.url.outputs.url }}/healthz
+          EXPECTED_COMMIT: ${{ github.sha }}
         run: |
-          sleep 5
-          curl -f ${{ steps.url.outputs.url }}/health || echo "Health check pending..."
+          for attempt in {1..6}; do
+            if commit=$(curl -fsS "$HEALTH_URL" | jq -er '.commit') && [ "$commit" = "$EXPECTED_COMMIT" ]; then
+              echo "Verified deployment: $commit"
+              exit 0
+            fi
+            echo "Deployment not verified (attempt $attempt/6)"
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
+          done
+          echo "::error::$HEALTH_URL did not report commit $EXPECTED_COMMIT"
+          exit 1

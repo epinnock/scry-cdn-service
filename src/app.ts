@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { compress } from "hono/compress";
 import { zipStaticRoutes } from "./routes/zip-static";
-import { healthRoutes } from "./routes/health";
+import { healthRoutes, healthzRoutes } from "./routes/health";
 import { privateProjectAuth } from "./middleware/auth";
 import { parsePathForUUID, extractProjectFromReferer } from "./utils/subdomain";
 import type { Env } from "./types/env";
@@ -86,6 +86,7 @@ export function createApp() {
 
   // Health check routes (no auth required)
   app.route("/health", healthRoutes);
+  app.route("/healthz", healthzRoutes);
 
   // Redirect mis-resolved asset requests before auth can reject them.
   // Components with absolute paths (e.g., src="/pets/hero.png" or src="/placeholder.svg")

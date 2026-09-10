@@ -1,6 +1,14 @@
 // Environment types for both Cloudflare Workers and Docker
 
 export interface Env {
+  // Public deployment metadata (never secrets)
+  SCRY_ENV?: "staging" | "production" | "dev";
+  SCRY_COMMIT?: string;
+  SCRY_BRANCH?: string;
+  SCRY_BUILD_TIME?: string;
+  SCRY_DEPLOY_ID?: string;
+  SCRY_ACTOR?: string;
+
   // Cloudflare Workers bindings
   STATIC_SITES?: R2Bucket;
   UPLOAD_BUCKET?: R2Bucket; // NEW: Upload Service bucket
