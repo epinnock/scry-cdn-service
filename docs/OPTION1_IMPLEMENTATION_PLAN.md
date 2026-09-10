@@ -592,7 +592,7 @@ The Upload Service should provide the View URL in its response:
 
 ### Production Testing
 
-1. Deploy to development environment
+1. Deploy to staging environment
 2. Upload via Upload Service staging endpoint
 3. Verify View Service automatically serves the content
 4. Test multiple projects and versions

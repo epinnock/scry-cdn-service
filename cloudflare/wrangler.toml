@@ -54,22 +54,23 @@ bucket_name = "my-storybooks-production"
 binding = "CDN_CACHE"
 id = "8be50ecb14a4424fa2f8a61d35e1e827"
 
-# Development/Staging environment
-[env.development]
+# Staging environment
+[env.staging]
 name = "scry-cdn-service-dev"
-vars = { PLATFORM = "cloudflare", ENVIRONMENT = "development", SCRY_ENV = "staging", FIREBASE_PROJECT_ID = "scry-dev-dashboard-stage" }
+vars = { PLATFORM = "cloudflare", ENVIRONMENT = "staging", SCRY_ENV = "staging", FIREBASE_PROJECT_ID = "scry-dev-dashboard-stage" }
 
-[[env.development.r2_buckets]]
+[[env.staging.r2_buckets]]
 binding = "STATIC_SITES"
 bucket_name = "scry-static-sites-preview"
 
-# NEW: Upload Service bucket for development
-[[env.development.r2_buckets]]
+# NEW: Upload Service bucket for staging
+[[env.staging.r2_buckets]]
 binding = "UPLOAD_BUCKET"
 bucket_name = "my-storybooks-staging"
 
-[[env.development.kv_namespaces]]
+[[env.staging.kv_namespaces]]
 binding = "CDN_CACHE"
+id = "a67fa5bbfdaf462394e802bb08ca9247"
 preview_id = "a67fa5bbfdaf462394e802bb08ca9247"
 
 # Build configuration

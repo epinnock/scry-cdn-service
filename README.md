@@ -106,6 +106,21 @@ npm run dev:docker
 
 ## Deployment
 
+Feature branches open PRs into `stage`. The single [deployment workflow](.github/workflows/deploy.yml)
+runs tests and typecheck on PRs, deploys pushes to `stage` to staging, and deploys
+pushes to `main` to production. Manual runs choose `staging` or `production`.
+Documentation-only pushes are filtered with `paths-ignore`. CI uses Node 22 and
+Wrangler 4.99.0 and verifies the deployed commit at `/healthz`.
+
+| Environment | Worker | Health URL | Manual script |
+|-------------|--------|------------|---------------|
+| staging | `scry-cdn-service-dev` | https://scry-cdn-service-dev.epinnock.workers.dev/healthz | `pnpm run deploy:cloudflare:staging` |
+| production | `scry-cdn-service` | https://view.scrymore.com/healthz | `pnpm run deploy:cloudflare` |
+
+The Wrangler environment key is `staging`; the existing dev worker name and
+resources stay unchanged. Local bulk-secret files use `.secrets.staging.json`
+and `.secrets.production.json`. See [CI setup and post-merge steps](docs/GITHUB_ACTIONS_SETUP.md).
+
 ### Cloudflare Workers
 
 1. **Create R2 bucket:**

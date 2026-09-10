@@ -205,7 +205,7 @@ graph LR
 
 ```bash
 # 1. Deploy to staging
-npm run deploy:cloudflare:dev
+npm run deploy:cloudflare:staging
 
 # 2. Test with staging upload bucket
 curl https://view-staging.scrymore.com/design-system-v1-0-0/

@@ -86,8 +86,8 @@ Wrangler secrets are encrypted and stored in Cloudflare, not in your repository.
 # For production environment
 npx wrangler secret put SECRET_NAME --env production
 
-# For development environment
-npx wrangler secret put SECRET_NAME --env development
+# For staging environment
+npx wrangler secret put SECRET_NAME --env staging
 
 # List existing secrets
 npx wrangler secret list --env production
@@ -114,68 +114,82 @@ npx wrangler secret list --env production
 | `CLOUDFLARE_API_TOKEN` | Your Cloudflare API token |
 | `CLOUDFLARE_ACCOUNT_ID` | `f54b9c10de9d140756dbf449aa124f1e` |
 
-## GitHub Environments (Optional but Recommended)
+## GitHub Environments
 
-For better deployment control, set up GitHub Environments:
-
-### Production Environment
-1. Go to **Settings** → **Environments**
-2. Click **New environment**
-3. Name it `production`
-4. Configure:
-   - **Required reviewers**: Add team members who must approve production deployments
-   - **Wait timer**: Optional delay before deployment
-   - **Deployment branches**: Restrict to `main` branch only
-
-### Staging Environment
-1. Create another environment named `staging`
-2. Configure with less restrictive settings for PR previews
-
-### Development Environment
-1. Create environment named `development`
-2. Used for manual workflow dispatch deployments
+The workflow records deployments under `staging` and `production`, each with its
+service URL. Configure branch policies in Settings → Environments to allow
+`stage` for staging and `main` for production. A manual run uses the selected
+branch, so that branch must be allowed by the target environment's policy.
 
 ## Workflow Triggers
 
-The deployment workflow triggers on:
+The single deployment workflow is `.github/workflows/deploy.yml`:
 
 | Trigger | Action |
 |---------|--------|
-| Push to `main` (scry-cdn-service changes) | Deploy to **production** |
-| Pull request to `main` (scry-cdn-service changes) | Deploy to **staging** |
-| Manual workflow dispatch | Deploy to selected environment |
+| Pull request (including feature PRs into `stage`) | Tests + typecheck only; never deploys |
+| Push to `stage` | Tests + typecheck → deploy to **staging** → verify commit |
+| Push to `main` | Tests + typecheck → deploy to **production** → verify commit |
+| Manual workflow dispatch | Tests + typecheck → deploy to selected environment → verify commit |
+
+Pushes changing only `**/*.md` or `docs/**` are ignored using `paths-ignore`.
+Use these path filters for documentation changes; omit skip directives from
+commit messages so code changes run CI. CI uses Node 22, pnpm 9, a frozen
+lockfile, and Wrangler 4.99.0. Deployments retain the Phase 0 commit/build stamp
+and serialize by Git ref (`deploy-${{ github.ref }}`, cancellation disabled).
+
+## After the Phase 1 Merge
+
+1. Create the remote `stage` branch from the merged `main`. Feature PRs then
+   target `stage`; promotion fast-forwards `main` to the tested `stage` commit.
+2. Confirm GitHub environments `staging` and `production` allow their respective
+   branches. If `development` had environment-specific secrets or settings,
+   carry those settings over to `staging` in the console.
+3. Keep the existing repository secrets `CLOUDFLARE_API_TOKEN` and
+   `CLOUDFLARE_ACCOUNT_ID`; no new runtime secrets or cloud resources are needed
+   for this rename. The worker stays `scry-cdn-service-dev`, retaining its secrets,
+   buckets, Firebase project and existing preview KV namespace. The staging KV
+   `id` now matches `preview_id`; local preview use retains `preview_id`.
+4. Rename any local secrets file for the former environment to `.secrets.staging.json`
+   before using your bulk-secret tooling. Such local files are not changed by
+   this migration.
+5. Resolve the pre-existing `UUIDResolution.project` type error in `src/app.ts`
+   separately before expecting a green deployment run: typecheck is a required
+   gate, so this error currently prevents either environment from deploying.
+
+No DNS or Worker console change is required for the existing workers.dev URL.
+A custom staging domain is optional and outside this phase.
 
 ## Manual Deployment
 
-To manually trigger a deployment:
+In GitHub Actions, select "Deploy CDN Service to Cloudflare", click **Run
+workflow**, choose the branch and `staging` or `production`, then run it.
+For a stamped CLI deploy from the repository root, use:
 
-1. Go to **Actions** tab in GitHub
-2. Select "Deploy CDN Service to Cloudflare" workflow
-3. Click **Run workflow**
-4. Select the environment (production or development)
-5. Click **Run workflow**
+```bash
+pnpm run deploy:cloudflare:staging
+pnpm run deploy:cloudflare
+```
+
+When using Wrangler directly, run it from `cloudflare/` (or pass
+`--config cloudflare/wrangler.toml`). Use `--env staging` for the staging worker.
 
 ## Verifying Deployment
 
-After deployment, verify the service is running:
+CI requires `/healthz` to report the exact deployed Git SHA. It retries up to
+six times with ten seconds between attempts and fails if none match.
 
 ```bash
 # Production
-curl https://view.scrymore.com/health
+curl -fsS https://view.scrymore.com/healthz
 
-# Development/Staging
-curl https://scry-cdn-service-dev.scrymore.workers.dev/health
+# Staging (worker name and URL are unchanged)
+curl -fsS https://scry-cdn-service-dev.epinnock.workers.dev/healthz
 ```
 
-Expected response:
-```json
-{
-  "status": "healthy",
-  "service": "scry-cdn-service",
-  "platform": "cloudflare",
-  "timestamp": "2024-01-15T10:30:00.000Z"
-}
-```
+Check the `commit` field against the workflow SHA and `env` against `staging`
+or `production`. The response also includes `branch`, `builtAt`, `deployId`
+and `actor` from the Phase 0 stamp.
 
 ## Troubleshooting
 
@@ -202,7 +216,7 @@ If the workflow fails with "secret not found":
 
 The workflow is defined in:
 ```
-.github/workflows/deploy-cdn-service.yml
+.github/workflows/deploy.yml
 ```
 
 ## Related Documentation

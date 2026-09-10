@@ -11,7 +11,7 @@
     "build:cloudflare": "tsup --entry.worker cloudflare/worker.ts --format esm --platform neutral",
     "build:docker": "tsup --entry.server docker/server.ts --format esm --platform node",
     "deploy:cloudflare": "bash -c 'cd cloudflare && wrangler deploy --env production --var SCRY_COMMIT:$(git rev-parse HEAD) --var SCRY_BRANCH:$(git rev-parse --abbrev-ref HEAD) --var SCRY_BUILD_TIME:$(date -u +%FT%TZ) --var SCRY_ACTOR:manual --tag $(git rev-parse HEAD) --message manual'",
-    "deploy:cloudflare:dev": "bash -c ' cd cloudflare && wrangler deploy --env development --var SCRY_COMMIT:$(git rev-parse HEAD) --var SCRY_BRANCH:$(git rev-parse --abbrev-ref HEAD) --var SCRY_BUILD_TIME:$(date -u +%FT%TZ) --var SCRY_ACTOR:manual --tag $(git rev-parse HEAD) --message manual'",
+    "deploy:cloudflare:staging": "bash -c 'cd cloudflare && wrangler deploy --env staging --var SCRY_COMMIT:$(git rev-parse HEAD) --var SCRY_BRANCH:$(git rev-parse --abbrev-ref HEAD) --var SCRY_BUILD_TIME:$(date -u +%FT%TZ) --var SCRY_ACTOR:manual --tag $(git rev-parse HEAD) --message manual'",
     "deploy:setup": "bash scripts/deploy-cloudflare.sh",
     "deploy:check": "bash scripts/check-cloudflare-permissions.sh",
     "docker:build": "docker build -f docker/Dockerfile -t scry-cdn-service:latest .",

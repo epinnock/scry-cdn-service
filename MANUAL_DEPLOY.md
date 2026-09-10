@@ -86,11 +86,11 @@ npx wrangler tail --env production
 curl https://view.scrymore.com/design-system-v1-0-0/
 ```
 
-## Deploy to Development (Staging)
+## Deploy to Staging
 
 ```bash
 cd cloudflare
-npx wrangler deploy --env development
+npx wrangler deploy --env staging
 ```
 
 ## Troubleshooting

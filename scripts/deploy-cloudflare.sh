@@ -38,7 +38,7 @@ echo ""
 echo "Step 2: Creating R2 buckets..."
 echo -e "${YELLOW}This will create two R2 buckets:${NC}"
 echo "  - scry-static-sites (production)"
-echo "  - scry-static-sites-preview (development)"
+echo "  - scry-static-sites-preview (staging)"
 read -p "Continue? (y/n) " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -80,7 +80,7 @@ echo ""
 echo "Step 4: Deploying to Cloudflare Workers..."
 echo -e "${YELLOW}Choose deployment environment:${NC}"
 echo "  1) Production (recommended for first deployment)"
-echo "  2) Development/Staging"
+echo "  2) Staging"
 read -p "Enter choice (1 or 2): " -n 1 -r
 echo ""
 
@@ -88,8 +88,8 @@ if [[ $REPLY == "1" ]]; then
     echo "Deploying to PRODUCTION..."
     npm run deploy:cloudflare
 elif [[ $REPLY == "2" ]]; then
-    echo "Deploying to DEVELOPMENT..."
-    npm run deploy:cloudflare:dev
+    echo "Deploying to STAGING..."
+    npm run deploy:cloudflare:staging
 else
     echo -e "${RED}Invalid choice. Exiting.${NC}"
     exit 1
