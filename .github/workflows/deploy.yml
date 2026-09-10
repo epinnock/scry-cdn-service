@@ -166,18 +166,40 @@ jobs:
             --tag ${{ github.sha }}
             --message "${{ github.ref_name }} ${{ github.actor }} run=${{ github.run_id }}"
 
-      - name: Verify deployment
+      # The scrymore.com zone answers GitHub's runners with 403 (edge rules), so
+      # production is verified through the Cloudflare API: the version serving
+      # 100% of traffic must carry the tag the deploy command set (the commit).
+      - name: Verify deployment (Cloudflare API)
         shell: bash
+        working-directory: cloudflare
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           EXPECTED_COMMIT: ${{ github.sha }}
         run: |
           for attempt in {1..6}; do
-            if commit=$(curl -fsS https://view.scrymore.com/healthz | jq -er '.commit') && [ "$commit" = "$EXPECTED_COMMIT" ]; then
-              echo "Verified deployment: $commit"
+            active=$(pnpm exec wrangler deployments status --env production --json 2>/dev/null \
+              | jq -r '[.versions[] | select(.percentage == 100)][0].version_id // empty')
+            tag=$(pnpm exec wrangler versions list --env production --json 2>/dev/null \
+              | jq -r --arg id "$active" '.[] | select(.id == $id) | .annotations["workers/tag"] // empty')
+            if [ -n "$active" ] && [ "$tag" = "$EXPECTED_COMMIT" ]; then
+              echo "Verified: version $active serves 100% and is tagged $tag"
               exit 0
             fi
-            echo "Deployment not verified (attempt $attempt/6)"
+            echo "Not verified yet (attempt $attempt/6): active=${active:-none} tag=${tag:-none}"
             if [ "$attempt" -lt 6 ]; then sleep 10; fi
           done
-          echo "::error::Production /healthz did not report commit $EXPECTED_COMMIT"
+          echo "::error::Production is not serving a version tagged $EXPECTED_COMMIT"
           exit 1
+
+      - name: Probe production /healthz (advisory)
+        shell: bash
+        continue-on-error: true
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          if commit=$(curl -fsS --max-time 20 https://view.scrymore.com/healthz | jq -er '.commit') && [ "$commit" = "$EXPECTED_COMMIT" ]; then
+            echo "Edge answered with the expected commit."
+          else
+            echo "::warning::view.scrymore.com/healthz did not answer with $EXPECTED_COMMIT from this runner (edge rules may block it); the API check above is authoritative."
+          fi
