@@ -117,8 +117,14 @@ export function createApp() {
 
     const pathInfo = parsePathForUUID(url.pathname);
     const pathInvalid = !pathInfo || !pathInfo.isValid || !pathInfo.resolution;
+    // Only compound UUIDs carry a project; a simple UUID never matches the
+    // referer's project, which keeps the redirect behaviour unchanged.
+    const resolvedProject =
+      pathInfo?.resolution?.type === "compound"
+        ? pathInfo.resolution.project
+        : undefined;
     const projectMismatch =
-      !pathInvalid && refProject.projectId !== pathInfo!.resolution!.project;
+      !pathInvalid && refProject.projectId !== resolvedProject;
 
     if (pathInvalid || projectMismatch) {
       const originalPath = url.pathname.slice(1);
