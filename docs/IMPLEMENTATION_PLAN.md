@@ -104,7 +104,7 @@ Wrangler bindings must include the `CDN_CACHE` KV namespace and R2 bucket refere
 
 2. **Build & Publish**  
    - `npm run build:cloudflare` to create `dist/worker.js`.  
-   - Deploy to staging via `npm run deploy:cloudflare:dev`.  
+   - Deploy to staging via `npm run deploy:cloudflare:staging`.
    - Promote to production with `npm run deploy:cloudflare` after smoke tests.
 
 3. **Rollout Monitoring**  

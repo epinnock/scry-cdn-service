@@ -161,7 +161,7 @@ Production is running an older deployment that doesn't have these features.
 
 ```bash
 # Development (staging bucket)
-npm run deploy:cloudflare:dev
+npm run deploy:cloudflare:staging
 
 # Production
 npm run deploy:cloudflare

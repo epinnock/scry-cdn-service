@@ -24,7 +24,7 @@ The **Scry View Service** is a CDN that serves static websites directly from ZIP
 ### Key Components
 
 - **R2 Buckets:** 
-  - `scry-static-sites` (production) / `scry-static-sites-preview` (development) - Legacy sites
+  - `scry-static-sites` (production) / `scry-static-sites-preview` (staging) - Legacy sites
   - `my-storybooks-production` / `my-storybooks-staging` - **NEW:** Upload Service integration
 - **KV Namespace:** `CDN_CACHE` - stores central directory metadata for 24 hours
 - **URL Format:** Path-based routing: `https://view.scrymore.com/{uuid}/path/to/file`
@@ -254,7 +254,7 @@ Standard ZIP tools (zip, 7-Zip, etc.) use Method 8 by default, which is fully su
 | Environment | Bucket Name | Purpose |
 |-------------|-------------|---------|
 | **Production** | `scry-static-sites` | Live sites served to users |
-| **Preview/Dev** | `scry-static-sites-preview` | Testing and development |
+| **Staging** | `scry-static-sites-preview` | Testing and development |
 
 ### Upload Methods
 

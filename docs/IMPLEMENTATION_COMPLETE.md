@@ -282,7 +282,7 @@ npm run build:cloudflare
 
 ```bash
 # Development
-npm run deploy:cloudflare:dev
+npm run deploy:cloudflare:staging
 
 # Production
 npm run deploy:cloudflare

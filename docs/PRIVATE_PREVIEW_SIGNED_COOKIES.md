@@ -147,7 +147,7 @@ previous hand-off text (also on the embed-failed path).
 
 **Rollout.** `scry-cdn-service-dev` runs the merged code with
 `PREVIEW_TOKEN_SECRET` set (stored only in the gitignored
-`.secrets.development.json`); Vercel Preview + Production carry the same
+`.secrets.staging.json`); Vercel Preview + Production carry the same
 value. **Production CDN is untouched**: it needs the secret
 (`cd cloudflare && wrangler secret put PREVIEW_TOKEN_SECRET --env production`)
 and a deploy (`wrangler deploy --env production`, or any push to `main`,

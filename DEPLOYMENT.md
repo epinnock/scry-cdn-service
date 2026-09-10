@@ -145,9 +145,10 @@ Edit `cloudflare/wrangler.toml` and update the KV namespace IDs:
 binding = "CDN_CACHE"
 id = "YOUR_PRODUCTION_KV_ID_HERE"  # Replace with id from Step 3
 
-# Around line 46 - Preview KV namespace
-[[env.development.kv_namespaces]]
+# Staging KV namespace (reuse the existing preview namespace)
+[[env.staging.kv_namespaces]]
 binding = "CDN_CACHE"
+id = "YOUR_PREVIEW_KV_ID_HERE"  # Same existing namespace for staging deploys
 preview_id = "YOUR_PREVIEW_KV_ID_HERE"  # Replace with preview_id from Step 3
 ```
 
@@ -254,17 +255,18 @@ Test in browser:
 https://view-abc123.yourdomain.com
 ```
 
-## Development Deployment
+## Staging Deployment
 
-To deploy to the development environment:
+To deploy to the staging environment:
 
 ```bash
-npm run deploy:cloudflare:dev
+npm run deploy:cloudflare:staging
 ```
 
 Or:
 ```bash
-npx wrangler deploy --env development
+cd cloudflare
+npx wrangler deploy --env staging
 ```
 
 ## Monitoring
