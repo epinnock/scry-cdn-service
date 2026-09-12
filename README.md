@@ -519,3 +519,5 @@ For issues and questions:
   - [`docs/PARTIAL_ZIP_ARCHITECTURE.md`](docs/PARTIAL_ZIP_ARCHITECTURE.md)
   - [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)
   - [`docs/IMPLEMENTATION_SUMMARY.md`](docs/IMPLEMENTATION_SUMMARY.md)
+
+Developed 2026 by Scry
