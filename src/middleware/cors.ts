@@ -54,6 +54,12 @@ export interface CorsConfig {
    */
   forceWildcard?: boolean;
 
+  /**
+   * If true, allows requests with `Origin: null`.
+   * This is required for Figma plugins and other sandboxed environments.
+   */
+  allowNullOrigin?: boolean;
+
   /** Optional override for Access-Control-Allow-Headers */
   allowHeaders?: string;
 
@@ -94,6 +100,19 @@ export function corsHeaders(
   config: CorsConfig = {},
 ): Headers {
   const origin = request.headers.get("Origin");
+
+  // Handle `Origin: null` for Figma plugins and sandboxed environments.
+  // We must respond with '*' because reflecting 'null' is not standards-compliant.
+  if (origin === "null" && config.allowNullOrigin) {
+    const nullOriginHeaders = new Headers({
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": config.allowMethods ?? "GET, HEAD, OPTIONS",
+      "Access-Control-Allow-Headers": config.allowHeaders ?? "Content-Type, Accept, Cookie",
+      "Access-Control-Max-Age": String(config.maxAgeSeconds ?? 86400),
+    });
+    // Credentials are not supported with wildcard origin, so we don't set them here.
+    return nullOriginHeaders;
+  }
 
   const headers = new Headers();
 

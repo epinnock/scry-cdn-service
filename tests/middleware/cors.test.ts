@@ -75,6 +75,18 @@ describe('CORS middleware', () => {
       expect(headers.get('Access-Control-Allow-Headers')).toBe('Content-Type, Accept, Cookie, Authorization');
       expect(headers.get('Access-Control-Max-Age')).toBe('86400');
     });
+
+    it('handles null origin when allowNullOrigin is true', () => {
+      const req = new Request('https://view.scrymore.com/x/y/file.json', {
+        headers: {
+          Origin: 'null'
+        }
+      });
+
+      const headers = corsHeaders(req, { allowNullOrigin: true });
+      expect(headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(headers.get('Access-Control-Allow-Credentials')).toBeNull();
+    });
   });
 
   describe('handleOptions', () => {
