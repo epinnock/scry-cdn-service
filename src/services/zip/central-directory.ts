@@ -1,7 +1,7 @@
 import { unzip } from 'unzipit';
 import { R2RangeReader } from '@/adapters/zip/r2-range-reader';
-import type { ZipCentralDirectory, ZipFileEntry } from '@/types/zip';
-import type { R2Bucket } from '@cloudflare/workers-types';
+import type { ZipCentralDirectory } from '@/types/zip';
+import type { R2Bucket, R2Object } from '@cloudflare/workers-types';
 
 /**
  * Get central directory from cache or read from R2.
@@ -14,12 +14,16 @@ export async function getCentralDirectory(
   zipKey: string
 ): Promise<ZipCentralDirectory> {
   const cacheKey = `cd:${zipKey}`;
+  // Paths are mutable (for example /main/). Validate against R2 even on a
+  // cache hit; a TTL or KV deletion alone cannot make an overwrite coherent.
+  const object = await bucket.head(zipKey);
+  if (!object) throw new Error(`ZIP file not found: ${zipKey}`);
 
   // Try KV cache first (if available)
   if (kv) {
     try {
       const cached = await kv.get<ZipCentralDirectory>(cacheKey, 'json');
-      if (cached) {
+      if (object.etag && cached?.etag === object.etag) {
         return cached;
       }
     } catch (error) {
@@ -29,10 +33,10 @@ export async function getCentralDirectory(
   }
 
   // Read from R2 using range requests
-  const centralDir = await readCentralDirectoryFromR2(bucket, zipKey);
+  const centralDir = await readCentralDirectoryFromR2(bucket, zipKey, object);
 
   // Cache for 24 hours (best-effort)
-  if (kv) {
+  if (kv && object.etag) {
     try {
       await kv.put(cacheKey, JSON.stringify(centralDir), {
         expirationTtl: 86400,
@@ -51,15 +55,17 @@ export async function getCentralDirectory(
  */
 async function readCentralDirectoryFromR2(
   bucket: R2Bucket,
-  zipKey: string
+  zipKey: string,
+  object: R2Object
 ): Promise<ZipCentralDirectory> {
-  const reader = new R2RangeReader(bucket, zipKey);
+  const reader = new R2RangeReader(bucket, zipKey, object);
 
   try {
     const { entries } = await unzip(reader);
 
     const centralDir: ZipCentralDirectory = {
       entries: {},
+      etag: object.etag,
       totalSize: await reader.getLength(),
       cachedAt: new Date().toISOString()
     };

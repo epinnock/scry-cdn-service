@@ -30,7 +30,7 @@ describe('Central Directory Service', () => {
     mockR2RangeReader.mockReset();
 
     mockBucket = {
-      head: vi.fn(),
+      head: vi.fn().mockResolvedValue({ size: 5000, etag: 'zip-v1' }),
       get: vi.fn()
     };
 
@@ -51,6 +51,7 @@ describe('Central Directory Service', () => {
   describe('getCentralDirectory', () => {
     it('returns cached central directory from KV', async () => {
       const cachedCD: ZipCentralDirectory = {
+        etag: 'zip-v1',
         entries: {
           'index.html': {
             name: 'index.html',
@@ -70,6 +71,7 @@ describe('Central Directory Service', () => {
       const result = await getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip');
 
       expect(result).toEqual(cachedCD);
+      expect(mockBucket.head).toHaveBeenCalledWith('test.zip');
       expect(mockKV.get).toHaveBeenCalledWith('cd:test.zip', 'json');
       expect(mockR2RangeReader).not.toHaveBeenCalled();
       expect(mockUnzip).not.toHaveBeenCalled();
@@ -106,7 +108,7 @@ describe('Central Directory Service', () => {
       const result = await getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip');
 
       expect(mockKV.get).toHaveBeenCalledWith('cd:test.zip', 'json');
-      expect(mockR2RangeReader).toHaveBeenCalledWith(mockBucket, 'test.zip');
+      expect(mockR2RangeReader).toHaveBeenCalledWith(mockBucket, 'test.zip', { size: 5000, etag: 'zip-v1' });
       expect(mockUnzip).toHaveBeenCalledWith(mockReader);
       expect(mockReader.getLength).toHaveBeenCalledTimes(1);
 
@@ -143,7 +145,62 @@ describe('Central Directory Service', () => {
         compressionMethod: 8
       });
       expect(parsedPayload.totalSize).toBe(5000);
+      expect(parsedPayload.etag).toBe('zip-v1');
       expect(typeof parsedPayload.cachedAt).toBe('string');
+    });
+
+    it.each([undefined, 'zip-v0'])('refreshes legacy or overwritten metadata (etag %s)', async (etag) => {
+      mockKV.get.mockResolvedValue({ etag, entries: { 'old.js': {} }, totalSize: 5000 });
+      mockUnzip.mockResolvedValue({ entries: { 'new.js': { size: 42, compressedSize: 42 } } });
+
+      const result = await getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip');
+
+      expect(result.etag).toBe('zip-v1');
+      expect(result.entries).toHaveProperty('new.js');
+      expect(result.entries).not.toHaveProperty('old.js');
+      expect(mockKV.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not serve a cached directory after the ZIP is deleted', async () => {
+      mockBucket.head.mockResolvedValue(null);
+      mockKV.get.mockResolvedValue({ etag: 'zip-v1', entries: {} });
+      await expect(getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip'))
+        .rejects.toThrow('ZIP file not found: test.zip');
+      expect(mockKV.get).not.toHaveBeenCalled();
+      expect(mockKV.put).not.toHaveBeenCalled();
+    });
+
+    it('does not trust cached metadata when R2 HEAD fails', async () => {
+      mockBucket.head.mockRejectedValue(new Error('R2 unavailable'));
+      await expect(getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip'))
+        .rejects.toThrow('R2 unavailable');
+      expect(mockKV.get).not.toHaveBeenCalled();
+    });
+
+    it('works without a KV binding', async () => {
+      mockUnzip.mockResolvedValue({ entries: {} });
+      const result = await getCentralDirectory(mockBucket as any, undefined, 'test.zip');
+      expect(result.etag).toBe('zip-v1');
+      expect(mockUnzip).toHaveBeenCalled();
+    });
+
+    it('does not reuse or write an unverifiable cache entry when ETag is absent', async () => {
+      mockBucket.head.mockResolvedValue({ size: 5000 });
+      mockKV.get.mockResolvedValue({ entries: { 'old.js': {} }, totalSize: 5000 });
+      mockUnzip.mockResolvedValue({ entries: {} });
+      const result = await getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip');
+      expect(result.entries).toEqual({});
+      expect(mockKV.put).not.toHaveBeenCalled();
+    });
+
+    it('serves fresh metadata even if the KV write fails', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockKV.put.mockRejectedValue(new Error('KV unavailable'));
+      mockUnzip.mockResolvedValue({ entries: {} });
+      const result = await getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip');
+      expect(result.etag).toBe('zip-v1');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
 
     it('falls back to R2 when KV read fails', async () => {

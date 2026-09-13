@@ -3,6 +3,8 @@
  * Cached in KV for fast lookups
  */
 export interface ZipCentralDirectory {
+  /** R2 identity used to reject stale metadata after an overwrite. Absent in legacy caches. */
+  etag?: string;
   /** Map of file paths to their entries */
   entries: Record<string, ZipFileEntry>;
   /** Total size of the ZIP file in bytes */

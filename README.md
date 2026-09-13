@@ -6,7 +6,7 @@ A production-ready CDN service built with [Hono](https://hono.dev/) for serving 
 
 ✅ **Partial ZIP Extraction**
 - Fetch only required byte ranges from `{uuid}.zip`
-- Cache central directory metadata in Cloudflare KV (24 hr TTL)
+- Cache central directory metadata in Cloudflare KV (24 hr TTL), validated against the current R2 ETag on every request
 - Supports stored and deflate-compressed entries via `pako`
 
 ✅ **Multi-Platform Support**
@@ -26,6 +26,20 @@ A production-ready CDN service built with [Hono](https://hono.dev/) for serving 
 - Dedicated ZIP utilities and services
 - Comprehensive Vitest unit suite
 - Hot reload for local development
+
+### Redeploying the same version
+
+ZIP paths such as `{project}/main/storybook.zip` can be overwritten. Before
+reusing `cd:<zipKey>`, the viewer reads R2 metadata and compares its ETag with
+the cached directory's ETag. Missing or mismatched identities trigger a fresh
+parse, including for legacy cache entries. No upload-side cache purge is needed;
+the 24-hour TTL controls retention, not freshness. This adds one R2 HEAD per ZIP
+asset request (also reused for the archive size on a cache miss).
+
+Directory and file range reads use R2 `onlyIf.etagMatches` to avoid combining
+offsets and bytes from different archives. An overwrite during a request can
+fail that request with 500; the next request reads the new archive. KV read or
+write failures fall back to R2. Browser cache policies are unchanged.
 
 ## Architecture
 

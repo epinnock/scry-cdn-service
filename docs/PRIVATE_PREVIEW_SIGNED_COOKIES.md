@@ -1,9 +1,11 @@
 # Part 4 design: in-plugin previews of private Storybooks (signed URL → partitioned cookie)
 
-**Status: built (2026-09-08) — CDN side in this repo (deployed to
-`scry-cdn-service-dev`; production awaits go-ahead), dashboard endpoint in
-scry-developer-dashboard, plugin side in scry-link. See "What was built" at
-the end.** Parts 1–3 (project Storybook URLs
+**Status: LIVE IN PRODUCTION (verified 2026-09-12).** Built 2026-09-08 (CDN here,
+dashboard endpoint in scry-developer-dashboard, plugin side in scry-link);
+production was reached by the deploy workflow added in #24 (`main` →
+production, commit `3fe0fa7`, 2026-09-10 19:44 UTC) and
+`PREVIEW_TOKEN_SECRET` is set on the production Worker. See "What was built"
+and "Production verification" at the end.** Parts 1–3 (project Storybook URLs
 in `/api/projects?include=storybookUrl`, an honest project picker in the plugin,
 and Scry PAT bearer auth on this CDN for private projects) let the Figma plugin
 list and link stories of private projects. What they do not give is a *preview*
@@ -207,3 +209,35 @@ $ curl "$CDN/$P/pr-996/iframe.html"          → 401
 $ curl "$CDN/$P/pr-996/iframe.html?scry_preview=<TOKEN minted for BlJfujLJOl8AJ8Vkkjou>"   → 401   # wrong project
 $ curl "https://view.scrymore.com/$P/v2/iframe.html?scry_preview=<TOKEN>"                → 200   # prod CDN, no secret: parameter ignored, project public there
 ```
+
+## Production verification (2026-09-12)
+
+Run against `view.scrymore.com` with a **private** project that has a build, using a
+freshly minted founder id token. Token redacted; every request is read-only.
+
+```
+POST dashboard.scrymore.com/api/projects/<private project>/preview-token
+  (no Authorization)                     → 401
+  Authorization: Bearer <id token>       → 200 {token, expiresAt (+10 min), storybookUrl}
+
+GET  <storybookUrl>/iframe.html?id=x&viewMode=story                       → 401   (no credential)
+
+GET  <storybookUrl>/iframe.html?id=x&viewMode=story&scry_preview=<TOKEN>  → 302
+     location:      /<projectId>/<version>/iframe.html?id=x&viewMode=story
+     cache-control: no-store
+     set-cookie:    __scry_preview=<TOKEN>; Path=/<projectId>/; Secure; HttpOnly;
+                    SameSite=None; Partitioned; Max-Age=583
+
+GET  <storybookUrl>/iframe.html?id=x&viewMode=story   (with the cookie)   → 200 text/html
+     referrer-policy: same-origin
+GET  <storybookUrl>/index.json                        (with the cookie)   → 200
+GET  <storybookUrl>/index.json                        (no cookie)         → 401
+GET  <storybookUrl>/iframe.html?scry_preview=<TOKEN+"x">                  → 401   (tampered)
+GET  <storybookUrl>/iframe.html?scry_preview=<token for another project>  → 401   (wrong project)
+```
+
+This also proves the Worker's `PREVIEW_TOKEN_SECRET` matches the dashboard's Vercel
+value: the exchange only succeeds when both sides share the secret.
+
+Remaining for the feature to be usable by designers: publish the plugin build that
+contains the `scry-link` side (the plugin mints the token and loads the iframe with it).
