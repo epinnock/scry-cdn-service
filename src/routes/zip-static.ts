@@ -139,7 +139,7 @@ zipStaticRoutes.get("/*", async (c) => {
         const indexEntry = centralDir.entries["index.html"];
 
         if (indexEntry) {
-          const data = await extractFile(storage, zipKey, indexEntry);
+          const data = await extractFile(storage, zipKey, indexEntry, centralDir.etag);
           return new Response(data, {
             headers: {
               "Content-Type": "text/html",
@@ -154,7 +154,7 @@ zipStaticRoutes.get("/*", async (c) => {
     }
 
     // Extract file using range request
-    const fileData = await extractFile(storage, zipKey, fileEntry);
+    const fileData = await extractFile(storage, zipKey, fileEntry, centralDir.etag);
 
     // Determine content type
     const contentType = getMimeType(cleanPath);

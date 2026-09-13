@@ -9,7 +9,8 @@ import type { R2Bucket } from '@cloudflare/workers-types';
 export async function extractFile(
   bucket: R2Bucket | any,
   zipKey: string,
-  entry: ZipFileEntry
+  entry: ZipFileEntry,
+  etag?: string
 ): Promise<ArrayBuffer> {
   // First, fetch the local file header to get the exact offset to compressed data
   // Local file header structure:
@@ -27,6 +28,7 @@ export async function extractFile(
   // Total: 30 bytes, followed by filename and extra field
   
   const headerObject = await (bucket as any).get(zipKey, {
+    ...(etag ? { onlyIf: { etagMatches: etag } } : {}),
     range: {
       offset: entry.offset,
       length: 30
@@ -48,6 +50,7 @@ export async function extractFile(
   
   // Fetch only the compressed bytes for this file using range request
   const object = await (bucket as any).get(zipKey, {
+    ...(etag ? { onlyIf: { etagMatches: etag } } : {}),
     range: {
       offset: dataOffset,
       length: entry.compressedSize

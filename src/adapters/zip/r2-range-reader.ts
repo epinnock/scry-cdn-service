@@ -1,4 +1,4 @@
-import type { R2Bucket } from '@cloudflare/workers-types';
+import type { R2Bucket, R2Object } from '@cloudflare/workers-types';
 
 /**
  * Custom Reader for unzipit that uses R2 range requests
@@ -9,8 +9,11 @@ export class R2RangeReader {
 
   constructor(
     private bucket: R2Bucket,
-    private key: string
-  ) {}
+    private key: string,
+    private object?: Pick<R2Object, 'size' | 'etag'>
+  ) {
+    this.length = object?.size;
+  }
 
   /**
    * Get the total size of the ZIP file
@@ -22,6 +25,7 @@ export class R2RangeReader {
         throw new Error(`ZIP file not found: ${this.key}`);
       }
       this.length = head.size;
+      this.object = head;
     }
     return this.length as number;
   }
@@ -31,10 +35,12 @@ export class R2RangeReader {
    */
   async read(offset: number, length: number): Promise<Uint8Array> {
     const object = await this.bucket.get(this.key, {
-      range: { offset, length }
+      range: { offset, length },
+      // Do not parse a mix of two ZIPs if a redeploy races the range reads.
+      ...(this.object?.etag ? { onlyIf: { etagMatches: this.object.etag } } : {})
     });
 
-    if (!object || !object.body) {
+    if (!object || !('body' in object) || !object.body) {
       throw new Error(`Failed to read range [${offset}, ${offset + length}] from ${this.key}`);
     }
 
