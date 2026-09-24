@@ -1,6 +1,8 @@
 # Scry CDN Service
 
-A production-ready CDN service built with [Hono](https://hono.dev/) for serving static Storybook builds and other static sites directly from Cloudflare R2 (or filesystem storage) using subdomain-based routing and partial ZIP extraction.
+A production-ready CDN service built with [Hono](https://hono.dev/) for serving static Storybook builds and other static sites directly from Cloudflare R2 (or filesystem storage) using path-based routing and partial ZIP extraction.
+
+Hosts: `view.scrymore.com` (production) and `view-stage.scrymore.com` (stage, Worker `scry-cdn-service-dev`).
 
 ## Features
 
@@ -15,7 +17,7 @@ A production-ready CDN service built with [Hono](https://hono.dev/) for serving 
 - Shared TypeScript codebase across platforms
 
 ✅ **CDN Capabilities**
-- Subdomain routing (`view-{uuid}.domain.com`)
+- Path routing (`view.scrymore.com/{projectId}/{versionId}/…` → `{projectId}/{versionId}/storybook.zip` in `UPLOAD_BUCKET`; see [URL_PATTERN_CHANGE.md](URL_PATTERN_CHANGE.md))
 - SPA fallbacks with smart path resolution
 - Automatic MIME type detection and cache headers
 - CORS support and custom cache policies
@@ -128,11 +130,13 @@ Wrangler 4.99.0 and verifies the deployed commit at `/healthz`.
 
 | Environment | Worker | Health URL | Manual script |
 |-------------|--------|------------|---------------|
-| staging | `scry-cdn-service-dev` | https://scry-cdn-service-dev.epinnock.workers.dev/healthz | `pnpm run deploy:cloudflare:staging` |
+| staging | `scry-cdn-service-dev` | https://view-stage.scrymore.com/healthz (also `scry-cdn-service-dev.epinnock.workers.dev`) | `pnpm run deploy:cloudflare:staging` |
 | production | `scry-cdn-service` | https://view.scrymore.com/healthz | `pnpm run deploy:cloudflare` |
 
-The Wrangler environment key is `staging`; the existing dev worker name and
-resources stay unchanged. Local bulk-secret files use `.secrets.staging.json`
+Promote a tested `stage` commit with `scry-management/promote.sh scry-cdn-service`
+(fast-forwards `main` after asking). The Wrangler environment key is `staging`; the
+existing dev worker name and resources stay unchanged. Config lives in
+`cloudflare/wrangler.toml`. Local bulk-secret files use `.secrets.staging.json`
 and `.secrets.production.json`. See [CI setup and post-merge steps](docs/GITHUB_ACTIONS_SETUP.md).
 
 ### Cloudflare Workers
@@ -150,10 +154,13 @@ wrangler kv:namespace create CDN_CACHE --preview
 
 3. **Update `wrangler.toml` with KV IDs**
 
-4. **Set secrets:**
+4. **Set secrets** (per env, `--env staging|production`):
 ```bash
 wrangler secret put FIREBASE_SERVICE_ACCOUNT
 wrangler secret put FIREBASE_API_KEY
+wrangler secret put FIREBASE_CLIENT_EMAIL     # Firestore lookups for private projects
+wrangler secret put FIREBASE_PRIVATE_KEY
+wrangler secret put PREVIEW_TOKEN_SECRET      # signed preview tokens (see Private projects)
 ```
 
 5. **Deploy:**
@@ -232,33 +239,36 @@ Add a wildcard DNS record:
 
 ### Worker Routes (Cloudflare)
 
-Configure in `wrangler.toml`:
-```toml
-routes = [
-  { pattern = "view-*.mysite.com/*", zone_name = "mysite.com" }
-]
-```
+Production (`cloudflare/wrangler.toml`) owns the wildcard route
+`*.scrymore.com/*`, so it answers for **every** proxied hostname in the zone that
+has no more specific route. Any other Worker added under `scrymore.com` needs its
+own `<host>/*` route (in addition to a custom domain), or this service will answer
+for it.
+
+Bindings per env: R2 `UPLOAD_BUCKET` (`my-storybooks-{staging,production}`, the
+upload service's bucket; what Storybook builds are served from), R2 `STATIC_SITES`
+(`scry-static-sites[-preview]`, legacy), KV `CDN_CACHE` (central directories,
+project visibility).
 
 ## Usage
 
 ### Upload Static Site
 
-Upload each build as a single ZIP archive stored at:
+Builds are uploaded by scry-storybook-upload-service, which stores each one at:
 
 ```
-static-sites/{project-uuid}.zip
+{projectId}/{versionId}/storybook.zip   (UPLOAD_BUCKET)
 ```
 
 - Place `index.html`, assets, and other files at their desired paths inside the archive.
-- Central directory metadata is cached in KV (`cd:{project-uuid}.zip`) for 24 hours to accelerate repeat requests.
-- Re-uploading a ZIP refreshes metadata automatically after TTL expiry; call [`clearCentralDirectoryCache()`](src/services/zip/central-directory.ts) to force an immediate refresh after replacing an archive.
+- Central directory metadata is cached in KV (`cd:<zipKey>`) for 24 hours and re-validated against the R2 ETag on every request (see "Redeploying the same version").
 
 ### Access Site
 
-Visit: `https://view-{project-uuid}.mysite.com`
+Visit: `https://view.scrymore.com/{projectId}/{versionId}/`
 
 The CDN will:
-1. Parse `{project-uuid}` from the subdomain.
+1. Parse `{projectId}` and `{versionId}` from the path (private projects are checked first; see Security).
 2. Load the ZIP central directory from KV (or hydrate from R2 using partial range reads).
 3. Locate the requested entry, fetch only the necessary compressed bytes, decompress if required, and respond with the correct headers.
 
@@ -284,7 +294,7 @@ Response:
 GET /{any-path}
 ```
 
-Serves files from storage based on subdomain UUID.
+Serves `/{projectId}[/{versionId}]/{file}` from the matching ZIP. Also `GET /healthz` (deploy stamp) and `GET /health/ready`.
 
 ### Coverage Reports
 Coverage report JSON files are served **alongside** Storybook builds, but are stored as **standalone objects** in R2:
@@ -442,7 +452,7 @@ async createBuild(projectId: string, userId: string, data: CreateBuildData) {
     versionId: data.versionId,
     buildNumber,
     zipUrl: data.zipUrl,
-    viewerUrl: `https://view-${projectId}.mysite.com`, // NEW!
+    viewerUrl: `https://view.scrymore.com/${projectId}/${data.versionId}/`,
     status: 'active',
     createdAt: FieldValue.serverTimestamp(),
     createdBy: userId,
