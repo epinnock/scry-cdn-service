@@ -30,7 +30,7 @@ zipStaticRoutes.get("/*", async (c) => {
   const cache = c.env.CDN_CACHE as any;
 
   // Extract UUID from path (view.domain.com/{uuid}/path)
-  const pathInfo = parsePathForUUID(url.pathname);
+  const pathInfo = parsePathForUUID(url.pathname, { logRejected: true });
 
   console.log("[DEBUG] URL pathname:", url.pathname);
   console.log("[DEBUG] Parsed pathInfo:", JSON.stringify(pathInfo, null, 2));

@@ -1,0 +1,924 @@
+{
+ "source": "scry-management/features/cdn-version-names-missing-zip/impact/version-names.txt + firestore-build-versions.txt (production R2 bucket my-storybooks-production and Firestore builds, listed 2026-09-26; names only, no project ids); 20-character project-id-shaped names replaced by same-shape synthetic ids (public repo)",
+ "r2VersionNames": [
+  {
+   "name": "0.0.1",
+   "prefixes": 2,
+   "withZip": 1,
+   "deployedParser": "REJECT"
+  },
+  {
+   "name": "0.0.3",
+   "prefixes": 3,
+   "withZip": 0,
+   "deployedParser": "REJECT"
+  },
+  {
+   "name": "SyntheticId000000001",
+   "prefixes": 2,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "SyntheticId000000002",
+   "prefixes": 1,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "SyntheticId000000003",
+   "prefixes": 2,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "SyntheticId000000004",
+   "prefixes": 2,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "SyntheticId000000005",
+   "prefixes": 2,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "SyntheticId000000006",
+   "prefixes": 1,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "aug3-demo-20260803",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786212512",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786213527",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786216145",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786245595",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786249772",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786253113",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786255183",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "demo-1786260947",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "e2e-1772676741",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "e2e-1772684688",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "SyntheticId000000007",
+   "prefixes": 1,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "latest",
+   "prefixes": 2,
+   "withZip": 2,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "local-test-2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "main",
+   "prefixes": 5,
+   "withZip": 5,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "mon-1786323111",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "mon-1786327340",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "mon-1786327340-r2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "mon-1786329651",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-1",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-10",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-100",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-101",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-102",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-103",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-104",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-105",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-106",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-107",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-108",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-109",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-11",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-110",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-111",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-112",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-113",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-114",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-115",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-116",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-117",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-118",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-119",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-12",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-120",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-121",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-122",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-123",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-124",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-140",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-141",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-142",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-143",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-144",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-145",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-147",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-148",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-149",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-152",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-154",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-3",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-71",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-72",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-73",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-74",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-75",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-76",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-77",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-78",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-79",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-80",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-81",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-82",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-83",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-84",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-85",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-86",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-87",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-88",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-89",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-90",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-91",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-92",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-93",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-94",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-95",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-96",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-97",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-98",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "pr-99",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "uploads",
+   "prefixes": 42,
+   "withZip": 0,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v-24-check",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v-pnpm-test",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v-pr-001",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v0.0.0",
+   "prefixes": 2,
+   "withZip": 2,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v0.0.2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v0.0.4",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1",
+   "prefixes": 4,
+   "withZip": 4,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.0.0",
+   "prefixes": 9,
+   "withZip": 9,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.0.0.2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.0.0.3",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.0.1",
+   "prefixes": 2,
+   "withZip": 2,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.1.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.1.1",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.1.2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.2.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.2.1",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.2.3",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.2.4",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.2.5",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.2.6",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.3.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.4.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.5.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.6.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.7.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.8.2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.9.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.9.1",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.9.2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.9.3",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.9.4",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v1.9.5",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2",
+   "prefixes": 3,
+   "withZip": 3,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2-full",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2.0.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2.0.1",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2.0.2",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2.0.3",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2.1.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v2.2.0",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v3",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v3-full",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v4",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v4-full",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "v5-full",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "widen-1786204305",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "widen-1786204868",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "widen-1786205571",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "widen-1786206234",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  },
+  {
+   "name": "widen-1786208332",
+   "prefixes": 1,
+   "withZip": 1,
+   "deployedParser": "ok"
+  }
+ ],
+ "firestoreDottedVersionNames": [
+  "0.0.3",
+  "1.0.0",
+  "v1.0.0",
+  "v1.0.e",
+  "v1.1.0",
+  "v1.1.1",
+  "v1.2.0",
+  "v1.2.2",
+  "v1.2.5",
+  "v1.4.0",
+  "v1.7.0",
+  "v1.7.3",
+  "v1.7.4",
+  "v1.8.2",
+  "v1.8.4",
+  "v1.9.0",
+  "v1.9.1",
+  "v1.9.2",
+  "v1.9.5",
+  "v2.0.0",
+  "v2.0.1",
+  "v2.1.0",
+  "v2.2.0"
+ ]
+}

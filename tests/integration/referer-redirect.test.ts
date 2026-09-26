@@ -149,4 +149,28 @@ describe('Referer-based redirect for root-level asset requests', () => {
 
     expect(res.status).toBe(200);
   });
+
+  describe('guarantee-5 referer redirect keeps a dotted version', () => {
+    it.each([
+      ['https://view.scrymore.com/TjYmKAiAQuIdYFlBnVOa/1.8.2/iframe.html?id=button--primary', '1.8.2'],
+      ['https://view.scrymore.com/TjYmKAiAQuIdYFlBnVOa/v1.2.3-rc.1/iframe.html', 'v1.2.3-rc.1'],
+      ['https://view.scrymore.com/TjYmKAiAQuIdYFlBnVOa/2026.09.26/', '2026.09.26'],
+    ])('an absolute asset requested from %s is redirected under version %s', async (referer, version) => {
+      const app = createApp();
+      const req = new Request('https://view.scrymore.com/placeholder.svg', { headers: { Referer: referer } });
+      const res = await app.fetch(req, createMockEnv() as any);
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location')).toBe(`/TjYmKAiAQuIdYFlBnVOa/${version}/placeholder.svg`);
+    });
+
+    it('a nested absolute asset path (/pets/hero.png) is redirected under the dotted version', async () => {
+      const app = createApp();
+      const req = new Request('https://view.scrymore.com/pets/hero.png', {
+        headers: { Referer: 'https://view.scrymore.com/TjYmKAiAQuIdYFlBnVOa/1.8.2/iframe.html' },
+      });
+      const res = await app.fetch(req, createMockEnv() as any);
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location')).toBe('/TjYmKAiAQuIdYFlBnVOa/1.8.2/pets/hero.png');
+    });
+  });
 });

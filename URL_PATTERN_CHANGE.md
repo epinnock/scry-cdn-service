@@ -87,6 +87,8 @@ https://view.scrymore.com/docs-site/
 
 ## URL Parsing Logic
 
+> **Superseded (2026-09-26):** version detection below is historical. The viewer now reads the version by position and accepts every name the upload service accepts, dots included (ISSUES.md #53). See README "Which version names open".
+
 The new parser in [`src/utils/subdomain.ts`](src/utils/subdomain.ts):
 
 1. Splits the path into segments: `/design-system/v1.0.1/index.html`

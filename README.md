@@ -272,6 +272,15 @@ The CDN will:
 2. Load the ZIP central directory from KV (or hydrate from R2 using partial range reads).
 3. Locate the requested entry, fetch only the necessary compressed bytes, decompress if required, and respond with the correct headers.
 
+#### Which version names open (URL rules)
+
+- **Any version name the upload service accepts opens here**, dots included: `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, the same regex as `scry-storybook-upload-service` `src/app.ts` (`VERSION_SEGMENT_REGEX`; copied into `src/utils/subdomain.ts` as `UPLOAD_VERSION_REGEX`, keep them in sync). `1.8.2`, `v1.2.3-rc.1`, `2026.09.26`, `aug3-demo-20260803`, `pr-12`, `latest` all work.
+- The version is read **by position**: in `/{projectId}/{versionId}/{file…}` or `/{projectId}/{versionId}/`, the second segment is the version whenever something (a further segment or a trailing `/`) follows it.
+- A bare `/{projectId}/{x}` with nothing after it keeps the old spelling rule: a name with a file extension (`/{projectId}/iframe.html`) is a file at the project root, anything else (`/{projectId}/v1`, `/{projectId}/v1.2.3`) is a version. Link dotted versions with the trailing slash: `/{projectId}/1.8.2/`.
+- A second segment that is followed by more path but fails the upload grammar cannot be a stored version; it is read as part of the file path (as before) and logged at warn (`version segment rejected by upload grammar`).
+- A build that was never uploaded answers a plain-text `404 Not found`; only R2/KV faults answer 500.
+- Absolute asset paths inside a Storybook (`/placeholder.svg`) are redirected to `/{projectId}/{versionId}/…` from the Referer, using the same rule, so they load from the version's zip.
+
 ## API Endpoints
 
 ### Health Check
