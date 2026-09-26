@@ -32,6 +32,13 @@ export interface Env {
   PREVIEW_TOKEN_SECRET?: string;
   PREVIEW_TOKEN_SECRET_PREVIOUS?: string;
 
+  /**
+   * Salt for the opaque uid tag written to logs (src/auth/log-id.ts). Unset =
+   * no user identifier is logged at all. Not a credential, but keep it out of
+   * git so the tag cannot be reversed by hashing known uids.
+   */
+  LOG_HASH_SALT?: string;
+
   // Docker/R2 specific
   STORAGE_TYPE?: "r2" | "filesystem";
   STORAGE_PATH?: string;

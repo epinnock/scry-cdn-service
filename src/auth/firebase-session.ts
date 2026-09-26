@@ -92,24 +92,15 @@ export async function validateFirebaseSessionCookie(
       audience: firebaseProjectId,
     });
 
-    console.info("[AUTH] JWT payload:", {
-      sub: payload.sub,
-      email: payload.email,
-      iss: payload.iss,
-      aud: payload.aud,
-      exp: payload.exp,
-      iat: payload.iat,
-    });
-
     const uid = payload.sub;
     const email = payload.email as string | undefined;
 
+    // Never log the payload, email or uid here: the caller logs an opaque
+    // uid tag and the outcome (audit 2026-09-26, gap 6).
     if (!uid) {
       console.error("[AUTH] Missing user ID (sub) in token payload");
       return { valid: false, error: "Missing user ID in token" };
     }
-
-    console.info("[AUTH] Session cookie validated successfully for uid:", uid);
 
     return {
       valid: true,
