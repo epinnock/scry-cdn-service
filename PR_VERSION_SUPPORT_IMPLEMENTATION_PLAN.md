@@ -1,5 +1,7 @@
 # PR Version Support Implementation Plan
 
+> **Superseded (2026-09-26).** The allowlist described below was replaced by position-based parsing against the upload service's version grammar (ISSUES.md #53, features/cdn-version-names-missing-zip). See the README section "Which version names open" and `src/utils/subdomain.ts`. Kept for history only.
+
 ## Executive Summary
 
 This document outlines the implementation plan to enable flexible version string support in the scry-cdn-service, allowing PR builds (`pr-001`), extended semantic versions (`v0.0.0.1`), and custom version identifiers to work alongside traditional semantic versions.
