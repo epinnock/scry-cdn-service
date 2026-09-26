@@ -1,4 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { captureConsole } from '../helpers/capture-console';
+
+// Only the signature/claims check is stubbed so the success path (which used
+// to log the whole JWT payload) can run without a Google-signed token.
+vi.mock('jose', async (orig) => {
+  const actual = await orig<typeof import('jose')>();
+  return {
+    ...actual,
+    importX509: vi.fn(async () => ({}) as any),
+    jwtVerify: vi.fn(),
+  };
+});
+import * as jose from 'jose';
 import {
   parseCookies,
   validateFirebaseSessionCookie,
@@ -55,5 +68,27 @@ describe('validateFirebaseSessionCookie', () => {
     const result = await validateFirebaseSessionCookie(fakeJwt, 'test-project');
     expect(result.valid).toBe(false);
     expect(result.error).toContain('key ID');
+  });
+});
+
+describe('validateFirebaseSessionCookie log privacy (audit 2026-09-26 gap 6)', () => {
+  it('logs neither email nor uid on a valid session', async () => {
+    const UID = 'uid-SECRET-9f3a';
+    (jose.jwtVerify as any).mockResolvedValue({
+      payload: { sub: UID, email: 'alice@example.com', iss: 'x', aud: 'test-project' },
+    });
+    const header = btoa(JSON.stringify({ alg: 'RS256', kid: 'k1' }));
+    const cache = { get: vi.fn(async () => ({ keys: { k1: 'PEM' } })), put: vi.fn() };
+
+    const cap = captureConsole();
+    try {
+      const result = await validateFirebaseSessionCookie(`${header}.e30.sig`, 'test-project', cache as any);
+      expect(result).toMatchObject({ valid: true, uid: UID });
+      const logged = cap.text();
+      expect(logged).not.toContain('@');
+      expect(logged).not.toContain(UID);
+    } finally {
+      cap.restore();
+    }
   });
 });

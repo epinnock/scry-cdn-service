@@ -20,6 +20,7 @@ import { getProjectVisibility, isProjectMember } from '@/services/visibility';
 import { validateFirebaseSessionCookie, parseCookies } from '@/auth/firebase-session';
 import { verifyScryPat } from '@/auth/scry-pat';
 import { signPreviewToken } from '../auth/preview-token.test';
+import { captureConsole } from '../helpers/capture-console';
 
 describe('privateProjectAuth middleware', () => {
   let app: Hono;
@@ -357,6 +358,88 @@ describe('privateProjectAuth middleware', () => {
         env as any,
       );
       expect(viaSession.headers.get('Referrer-Policy')).toBe('same-origin');
+    });
+  });
+
+  // Audit 2026-09-26 gap 6: the viewer logged the session email, the raw uid,
+  // every cookie name and the first 50 chars of the Cookie header.
+  describe('log privacy', () => {
+    const EMAIL = 'alice@example.com';
+    const UID = 'uid-SECRET-9f3a';
+    const COOKIES = { __session: 'sess-token', _ga: 'GA1.2.3', figma_ref: 'x' };
+    const COOKIE_HEADER = '__session=sess-token; _ga=GA1.2.3; figma_ref=x';
+
+    const assertClean = (logged: string) => {
+      expect(logged).not.toContain('@');
+      expect(logged).not.toContain(UID);
+      for (const name of Object.keys(COOKIES)) expect(logged).not.toContain(name);
+      for (const value of Object.values(COOKIES)) expect(logged).not.toContain(value);
+    };
+
+    for (const [label, member, status] of [
+      ['member (200)', true, 200],
+      ['non-member (403)', false, 403],
+    ] as const) {
+      it(`logs no email, uid or cookie names for a ${label}`, async () => {
+        (getProjectVisibility as any).mockResolvedValue({ visibility: 'private', memberIds: [UID] });
+        (parseCookies as any).mockReturnValue(COOKIES);
+        (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: UID, email: EMAIL });
+        (isProjectMember as any).mockReturnValue(member);
+
+        const cap = captureConsole();
+        try {
+          const res = await app.fetch(
+            new Request('https://view.scrymore.com/private-project/v1/index.html', { headers: { Cookie: COOKIE_HEADER } }),
+            { ...mockEnv, LOG_HASH_SALT: 'test-salt' } as any,
+          );
+          expect(res.status).toBe(status);
+          const logged = cap.text();
+          assertClean(logged);
+          // The opaque tag is present so one user's requests stay correlatable.
+          expect(logged).toMatch(/"uidTag":"[0-9a-f]{8}"/);
+        } finally {
+          cap.restore();
+        }
+      });
+    }
+
+    it('logs no identifier at all when LOG_HASH_SALT is unset', async () => {
+      (getProjectVisibility as any).mockResolvedValue({ visibility: 'private', memberIds: [UID] });
+      (parseCookies as any).mockReturnValue(COOKIES);
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: UID, email: EMAIL });
+      (isProjectMember as any).mockReturnValue(true);
+
+      const cap = captureConsole();
+      try {
+        await app.fetch(
+          new Request('https://view.scrymore.com/private-project/v1/index.html', { headers: { Cookie: COOKIE_HEADER } }),
+          mockEnv as any,
+        );
+        const logged = cap.text();
+        assertClean(logged);
+        expect(logged).toContain('"uidTag":"none"');
+      } finally {
+        cap.restore();
+      }
+    });
+
+    it('logs no cookie names or values when the session cookie is missing', async () => {
+      (getProjectVisibility as any).mockResolvedValue({ visibility: 'private', memberIds: [UID] });
+      const others = { _ga: 'GA1.2.3', figma_ref: 'x' };
+      (parseCookies as any).mockReturnValue(others);
+
+      const cap = captureConsole();
+      try {
+        const res = await app.fetch(
+          new Request('https://view.scrymore.com/private-project/v1/index.html', { headers: { Cookie: '_ga=GA1.2.3; figma_ref=x' } }),
+          mockEnv as any,
+        );
+        expect(res.status).toBe(401);
+        const logged = cap.text();
+        for (const k of [...Object.keys(others), ...Object.values(others)]) expect(logged).not.toContain(k);
+      } finally {
+        cap.restore();
+      }
     });
   });
 });

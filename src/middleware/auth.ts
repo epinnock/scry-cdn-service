@@ -12,6 +12,7 @@ import {
   previewCookie,
   verifyPreviewToken,
 } from "@/auth/preview-token";
+import { uidTag } from "@/auth/log-id";
 
 const SESSION_COOKIE_NAME = "__session";
 
@@ -70,7 +71,6 @@ export async function privateProjectAuth(
     projectId,
     visibility: project.visibility,
     memberCount: project.memberIds.length,
-    memberIds: project.memberIds,
   });
 
   if (project.visibility === "public") {
@@ -97,7 +97,7 @@ export async function privateProjectAuth(
       }
       if (!isProjectMember(project.memberIds, pat.uid)) {
         console.warn("[AUTH] PAT owner is not a project member:", {
-          uid: pat.uid,
+          uidTag: await uidTag(pat.uid, c.env.LOG_HASH_SALT),
           projectId,
         });
         return c.text("Forbidden", 403);
@@ -121,7 +121,7 @@ export async function privateProjectAuth(
     }
     url.searchParams.delete(PREVIEW_QUERY_PARAM);
     console.info("[AUTH] Preview token exchanged for cookie:", {
-      uid: verified.uid,
+      uidTag: await uidTag(verified.uid, c.env.LOG_HASH_SALT),
       projectId,
       remainingSeconds: verified.remainingSeconds,
     });
@@ -148,7 +148,7 @@ export async function privateProjectAuth(
     );
     if (verified) {
       console.info("[AUTH] Preview cookie accepted:", {
-        uid: verified.uid,
+        uidTag: await uidTag(verified.uid, c.env.LOG_HASH_SALT),
         projectId,
       });
       return servePrivate(c, next);
@@ -159,12 +159,12 @@ export async function privateProjectAuth(
   const sessionCookie = cookies[SESSION_COOKIE_NAME];
 
   console.info("[AUTH] Session cookie present:", !!sessionCookie);
-  console.info("[AUTH] All cookies received:", Object.keys(cookies));
 
   if (!sessionCookie) {
+    // Only a count: cookie names and values are never logged (audit gap 6).
     console.info("[AUTH] No session cookie for private project:", {
       projectId,
-      cookieHeader: cookieHeader ? `${cookieHeader.substring(0, 50)}...` : null,
+      cookieCount: Object.keys(cookies).length,
     });
     return c.text("Unauthorized", 401);
   }
@@ -187,39 +187,28 @@ export async function privateProjectAuth(
     c.env.CDN_CACHE,
   );
 
-  console.info("[AUTH] Session validation result:", {
-    valid: validation.valid,
-    uid: validation.uid,
-    email: validation.email,
-    error: validation.error,
-  });
+  const tag = await uidTag(validation.uid, c.env.LOG_HASH_SALT);
 
   if (!validation.valid || !validation.uid) {
-    console.info("[AUTH] Invalid session cookie:", {
+    console.info("[AUTH] Session invalid:", {
       projectId,
       error: validation.error,
     });
     return c.text("Unauthorized", 401);
   }
 
-  const isMember = isProjectMember(project.memberIds, validation.uid);
-  console.info("[AUTH] Membership check:", {
-    uid: validation.uid,
-    projectId,
-    memberIds: project.memberIds,
-    isMember,
-  });
-
-  if (!isMember) {
-    console.info("[AUTH] User not a member:", {
-      uid: validation.uid,
+  if (!isProjectMember(project.memberIds, validation.uid)) {
+    console.info("[AUTH] Session valid, not a member:", {
+      uidTag: tag,
       projectId,
-      memberIds: project.memberIds,
     });
     return c.text("Forbidden", 403);
   }
 
-  console.info("[AUTH] Access granted:", { uid: validation.uid, projectId });
+  console.info("[AUTH] Session valid, access granted:", {
+    uidTag: tag,
+    projectId,
+  });
 
   return servePrivate(c, next);
 }
