@@ -43,8 +43,8 @@ export function isValidUUID(uuid: string): boolean {
 
 /**
  * The version-name grammar the upload service enforces. Copied verbatim from
- * scry-storybook-upload-service src/app.ts:47 (`VERSION_SEGMENT_REGEX`, line 48
- * on origin/main as of 2026-09-26). The two services share no package, so keep
+ * scry-storybook-upload-service src/app.ts:48 (`VERSION_SEGMENT_REGEX`, origin/main
+ * as of 2026-09-26). The two services share no package, so keep
  * this copy in sync by hand: every name the upload accepts must open here
  * (ISSUES.md #53; features/cdn-version-names-missing-zip).
  */
@@ -83,10 +83,15 @@ function isBareVersionSegment(segment: string): boolean {
  * - `/{project}/{x}` with nothing after it: the bare heuristic above.
  *
  * A segment that is followed by more path but fails the upload grammar cannot
- * be a stored version; it falls back to "no version" as before, and says so in
- * the log, since that request can only resolve to the project root.
+ * be a stored version; it falls back to "no version" as before. The zip route
+ * (the one parse per request that decides the R2 key) passes logRejected so the
+ * fallback is logged once at warn; the Referer middleware parses silently.
  */
-function readVersion(segments: string[], trailingSlash: boolean): string {
+function readVersion(
+  segments: string[],
+  trailingSlash: boolean,
+  logRejected = false,
+): string {
   if (segments.length < 2) return "";
   const candidate = segments[1];
   const followed = segments.length >= 3 || trailingSlash;
@@ -97,10 +102,12 @@ function readVersion(segments: string[], trailingSlash: boolean): string {
   if (UPLOAD_VERSION_REGEX.test(candidate)) {
     return candidate;
   }
-  console.warn("[subdomain] version segment rejected by upload grammar", {
-    segment: candidate.slice(0, 64),
-    length: candidate.length,
-  });
+  if (logRejected) {
+    console.warn("[subdomain] version segment rejected by upload grammar", {
+      segment: candidate.slice(0, 64),
+      length: candidate.length,
+    });
+  }
   return "";
 }
 
@@ -152,7 +159,10 @@ export function extractProjectFromReferer(
   }
 }
 
-export function parsePathForUUID(pathname: string): PathInfo | null {
+export function parsePathForUUID(
+  pathname: string,
+  opts: { logRejected?: boolean } = {},
+): PathInfo | null {
   // Remove leading slash
   const cleanPath = pathname.startsWith("/") ? pathname.slice(1) : pathname;
 
@@ -172,7 +182,11 @@ export function parsePathForUUID(pathname: string): PathInfo | null {
   }
 
   // Position decides whether segment 2 is the version (see readVersion).
-  const versionId = readVersion(segments, hasTrailingSlash(cleanPath));
+  const versionId = readVersion(
+    segments,
+    hasTrailingSlash(cleanPath),
+    opts.logRejected === true,
+  );
   const filePathStartIndex = versionId ? 2 : 1;
 
   // Remaining segments form the file path

@@ -85,11 +85,14 @@ describe('guarantee-1 every upload-legal version resolves to its own zip', () =>
   it('a segment the upload grammar refuses is not read as a version, and the fallback is logged (bad path)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const bad of ['_x', '-x', '.hidden', 'A'.repeat(129), 'a b', 'a%2Fb']) {
-      const r = parsePathForUUID(`/${P}/${bad}/index.html`);
-      expect(resolved(`/${P}/${bad}/index.html`).version, bad).toBe('');
+      const r = parsePathForUUID(`/${P}/${bad}/index.html`, { logRejected: true });
+      expect((r?.resolution as CompoundUUID).version, bad).toBe('');
       expect(r?.filePath, bad).toBe(`${bad}/index.html`);
+      // silent parses (Referer middleware) do not log, so a junk Referer cannot multiply warnings
+      expect(resolved(`/${P}/${bad}/index.html`).version, bad).toBe('');
+      expect(extractProjectFromReferer(`https://view.scrymore.com/${P}/${bad}/x.html`)?.versionId, bad).toBe('');
     }
-    expect(warn).toHaveBeenCalledTimes(12); // 6 names x 2 parses
+    expect(warn).toHaveBeenCalledTimes(6); // once per name, only from the logged (zip-route) parse
     expect(warn.mock.calls[0][0]).toMatch(/rejected by upload grammar/);
   });
 });
