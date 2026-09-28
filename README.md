@@ -523,6 +523,15 @@ parameter is rejected. Design and browser caveats:
 3. Check storage adapter configuration
 
 ### CORS errors
+
+The stage deployment adds the exact stage dashboard and redesign preview origins through
+`CORS_STAGE_ALLOWED_ORIGINS` in `cloudflare/wrangler.toml`. This is additive: stage's existing
+`CORS_ALLOWED_ORIGINS` secret (or legacy allowlist) is preserved. The extension is used only
+with `SCRY_ENV=staging` and `FIREBASE_PROJECT_ID=scry-dev-dashboard-stage`; production ignores
+it. Entries must be exact HTTPS origins, without wildcards, credentials, paths or queries.
+The current preview origin is specific to this feature and should be removed when the
+isolated redesign preview is retired. Keep the stage dashboard origin.
+
 1. Verify `CORS_ALLOWED_ORIGINS` / `ALLOWED_ORIGINS` configuration
 2. Check DNS/routing configuration
 3. Ensure CORS middleware is active (see [`corsHeaders()`](src/middleware/cors.ts:1))

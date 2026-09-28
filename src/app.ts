@@ -24,8 +24,31 @@ function resolveCorsConfig(env: Env) {
   // Only force wildcard if explicitly set via CORS_FORCE_WILDCARD=true.
   const forceWildcard = env.CORS_FORCE_WILDCARD === "true";
 
-  const allowedOrigins =
+  const baseOrigins =
     fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_ALLOWED_ORIGINS;
+  // Stage already has a secret allowlist. Extend it without replacing unknown
+  // legitimate callers, and never apply this extension to production.
+  const stageOrigins =
+    env.SCRY_ENV === "staging" &&
+    env.FIREBASE_PROJECT_ID === "scry-dev-dashboard-stage"
+      ? (parseAllowedOrigins(env.CORS_STAGE_ALLOWED_ORIGINS) ?? []).filter(
+          (origin) => {
+            try {
+              const url = new URL(origin);
+              return (
+                url.protocol === "https:" &&
+                url.origin === origin &&
+                !url.hostname.includes("*")
+              );
+            } catch {
+              return false;
+            }
+          },
+        )
+      : [];
+  const allowedOrigins = stageOrigins.length
+    ? [...new Set([...baseOrigins, ...stageOrigins])]
+    : baseOrigins;
   const debug = env.NODE_ENV !== "production";
 
   // Debug logging for CORS configuration
