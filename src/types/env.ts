@@ -61,6 +61,8 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** Preferred CORS allowlist (comma-separated list) */
   CORS_ALLOWED_ORIGINS?: string;
+  /** Additive exact HTTPS origins, only on the stage environment and Firebase project. */
+  CORS_STAGE_ALLOWED_ORIGINS?: string;
   /** Force wildcard mode even if allowlist contains matches */
   CORS_FORCE_WILDCARD?: string;
 
