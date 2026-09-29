@@ -1,3 +1,4 @@
+import { requestIdMiddleware } from '@/middleware/request-id';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { privateProjectAuth } from '@/middleware/auth';
@@ -35,6 +36,7 @@ describe('privateProjectAuth middleware', () => {
     (getSessionValidAfter as any).mockResolvedValue(0); // never signed out
 
     app = new Hono();
+    app.use('/*', requestIdMiddleware);
     app.use('/*', privateProjectAuth);
     app.get('/*', (c) => c.text('OK'));
   });
@@ -402,7 +404,7 @@ describe('privateProjectAuth middleware', () => {
           const logged = cap.text();
           assertClean(logged);
           // The opaque tag is present so one user's requests stay correlatable.
-          expect(logged).toMatch(/"uidTag":"[0-9a-f]{8}"/);
+          expect(logged).toMatch(/"uid_hash":"[0-9a-f]{12}"/);
         } finally {
           cap.restore();
         }
@@ -423,7 +425,7 @@ describe('privateProjectAuth middleware', () => {
         );
         const logged = cap.text();
         assertClean(logged);
-        expect(logged).toContain('"uidTag":"none"');
+        expect(logged).not.toContain('uid_hash');
       } finally {
         cap.restore();
       }

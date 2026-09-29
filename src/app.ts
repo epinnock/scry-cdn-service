@@ -1,5 +1,6 @@
+import { log, reportError, withLogContext } from "./lib/log";
 import { Hono } from "hono";
-import { logger } from "hono/logger";
+import { requestIdMiddleware } from "./middleware/request-id";
 import { compress } from "hono/compress";
 import { zipStaticRoutes } from "./routes/zip-static";
 import { healthRoutes, healthzRoutes } from "./routes/health";
@@ -49,16 +50,12 @@ function resolveCorsConfig(env: Env) {
   const allowedOrigins = stageOrigins.length
     ? [...new Set([...baseOrigins, ...stageOrigins])]
     : baseOrigins;
-  const debug = env.NODE_ENV !== "production";
+  // Debug lines (CORS config, per-request CORS decisions) are opt-in: SCRY_LOG_DEBUG=1.
+  const debug = env.SCRY_LOG_DEBUG === "1";
 
   // Debug logging for CORS configuration
   if (debug) {
-    console.log("[CORS] Config resolved:", {
-      forceWildcard,
-      allowedOrigins: allowedOrigins.slice(0, 5), // Log first 5 origins
-      envCorsAllowedOrigins: env.CORS_ALLOWED_ORIGINS,
-      envAllowedOrigins: env.ALLOWED_ORIGINS,
-    });
+    log.debug("cors config resolved");
   }
 
   return {
@@ -75,7 +72,9 @@ export function createApp() {
   }>();
 
   // Global middleware
-  app.use("*", logger());
+  // Request id (always minted: this edge faces browsers), one schema-v1 request line per request,
+  // x-scry-request-id echoed on every response including CORS preflights and 404s.
+  app.use("*", requestIdMiddleware);
 
   // Resolve CORS config once per request for reuse.
   app.use("*", async (c, next) => {
@@ -174,7 +173,9 @@ export function createApp() {
 
   // Error handler
   app.onError((err, c) => {
-    console.error("Application error:", err);
+    withLogContext({ request_id: c.get("requestId") }, () =>
+      reportError(err, "application error", "unhandled_error"),
+    );
     // Ensure CORS headers are present on error responses as well
     const corsConfig = c.get("corsConfig") ?? resolveCorsConfig(c.env);
     const cors = corsHeaders(c.req.raw, corsConfig);

@@ -14,6 +14,7 @@
  * cached briefly in KV so a Storybook's dozens of asset requests do not each
  * cost a Firestore query.
  */
+import { log } from "../lib/log";
 import type { Env } from "@/types/env";
 import {
   getFirestoreAccessToken,
@@ -97,9 +98,9 @@ export async function verifyScryPat(
 
   const firebaseProjectId = env.FIREBASE_PROJECT_ID;
   if (!firebaseProjectId || !isServiceAccountConfigured(env)) {
-    console.error(
-      "[PAT] Firestore service account not configured; rejecting bearer",
-    );
+    log.error("pat service account not configured", {
+      err_code: "pat_no_service_account",
+    });
     return null;
   }
   const accessToken = await getFirestoreAccessToken(env);
@@ -131,12 +132,12 @@ export async function verifyScryPat(
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.error("[PAT] Firestore runQuery failed:", res.status);
+      log.error("pat query failed", { err_code: "pat_query_failed" });
       return null;
     }
     rows = (await res.json()) as RunQueryRow[];
-  } catch (error) {
-    console.error("[PAT] Firestore runQuery error:", error);
+  } catch {
+    log.error("pat query error", { err_code: "pat_query_error" });
     return null;
   }
 

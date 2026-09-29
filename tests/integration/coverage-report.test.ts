@@ -74,7 +74,7 @@ describe('coverage report serving', () => {
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://dashboard.scrymore.com');
 
     const body = await res.json();
-    expect(body).toEqual({ error: 'Coverage report not found' });
+    expect(body).toEqual({ error: 'Coverage report not found', request_id: res.headers.get('x-scry-request-id') });
   });
 
   it('uses short cache in non-production environments', async () => {

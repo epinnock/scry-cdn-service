@@ -1,3 +1,4 @@
+import { log } from "../lib/log";
 import type { Env } from "@/types/env";
 import {
   getFirestoreAccessToken,
@@ -56,8 +57,8 @@ export async function getProjectVisibility(
     }
 
     return result;
-  } catch (error) {
-    console.error("[VISIBILITY] Failed to fetch project:", error);
+  } catch {
+    log.error("project fetch failed", { err_code: "visibility_fetch_failed" });
     return { visibility: "private", memberIds: [] };
   }
 }
@@ -72,17 +73,15 @@ async function fetchProjectFromFirestore(
     // Throw rather than return null. Returning null would report every project
     // as "not found", letting one missing binding decide access for every
     // project. Throwing routes into the caller's catch, which fails closed.
-    console.error("[VISIBILITY] FIREBASE_PROJECT_ID not configured");
+    log.error("firebase project not configured", {
+      err_code: "firebase_project_unset",
+    });
     throw new Error("FIREBASE_PROJECT_ID not configured");
   }
 
   const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/projects/${projectId}`;
 
-  console.info("[VISIBILITY] Fetching project from Firestore:", {
-    projectId,
-    firebaseProjectId,
-    url,
-  });
+  log.debug("fetching project");
 
   // Build request headers - use service account auth if configured
   const headers: Record<string, string> = {};
@@ -91,45 +90,35 @@ async function fetchProjectFromFirestore(
     const accessToken = await getFirestoreAccessToken(env);
 
     if (!accessToken) {
-      console.error(
-        "[VISIBILITY] Service account configured but failed to get access token",
-      );
+      log.error("service account token failed", {
+        err_code: "sa_token_failed",
+      });
       throw new Error("Failed to authenticate with Firestore");
     }
 
     headers["Authorization"] = `Bearer ${accessToken}`;
-    console.info("[VISIBILITY] Using service account authentication");
+    log.debug("using service account");
   } else {
-    console.info(
-      "[VISIBILITY] Using unauthenticated Firestore access (requires public rules)",
-    );
+    log.debug("using unauthenticated firestore");
   }
 
   const response = await fetch(url, { headers });
 
-  console.info("[VISIBILITY] Firestore response status:", response.status);
+  log.debug("firestore responded");
 
   if (!response.ok) {
     if (response.status === 404) {
-      console.info("[VISIBILITY] Project not found in Firestore:", projectId);
+      log.debug("project not found");
       return null;
     }
-    const errorText = await response.text();
-    console.error("[VISIBILITY] Firestore request failed:", {
-      status: response.status,
-      error: errorText,
+    await response.text(); // drain the body; its text is never logged (may quote project data)
+    log.error("firestore request failed", {
+      err_code: "firestore_request_failed",
     });
     throw new Error(`Firestore request failed: ${response.status}`);
   }
 
   const doc = (await response.json()) as FirestoreDocument;
-
-  console.info("[VISIBILITY] Raw Firestore document fields:", {
-    hasVisibility: !!doc.fields?.visibility,
-    hasMemberIds: !!doc.fields?.memberIds,
-    visibilityValue: doc.fields?.visibility?.stringValue,
-    memberIdsCount: doc.fields?.memberIds?.arrayValue?.values?.length,
-  });
 
   const visibility =
     (doc.fields?.visibility?.stringValue as ProjectVisibility) || "public";
@@ -137,12 +126,6 @@ async function fetchProjectFromFirestore(
     doc.fields?.memberIds?.arrayValue?.values?.map(
       (value: { stringValue: string }) => value.stringValue,
     ) || [];
-
-  console.info("[VISIBILITY] Parsed project data:", {
-    projectId,
-    visibility,
-    memberIds,
-  });
 
   return { visibility, memberIds };
 }

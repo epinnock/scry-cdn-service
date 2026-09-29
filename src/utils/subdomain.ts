@@ -1,3 +1,4 @@
+import { log } from "../lib/log";
 import { resolveUUID, type UUIDResolution } from "./path-resolver";
 
 export interface SubdomainInfo {
@@ -103,9 +104,8 @@ function readVersion(
     return candidate;
   }
   if (logRejected) {
-    console.warn("[subdomain] version segment rejected by upload grammar", {
-      segment: candidate.slice(0, 64),
-      length: candidate.length,
+    log.warn("version segment rejected", {
+      err_code: "version_segment_rejected",
     });
   }
   return "";

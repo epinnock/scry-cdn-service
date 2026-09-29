@@ -18,6 +18,7 @@
  * secrets are accepted (PREVIEW_TOKEN_SECRET, PREVIEW_TOKEN_SECRET_PREVIOUS)
  * so the shared secret can be rotated without a window of broken previews.
  */
+import { log } from "../lib/log";
 import type { Env } from "@/types/env";
 
 export const PREVIEW_QUERY_PARAM = "scry_preview";
@@ -113,7 +114,9 @@ export async function verifyPreviewToken(
 ): Promise<VerifiedPreviewToken | null> {
   const secrets = previewTokenSecrets(env);
   if (secrets.length === 0) {
-    console.error("[PREVIEW] PREVIEW_TOKEN_SECRET not configured; rejecting");
+    log.error("preview token secret unset", {
+      err_code: "preview_secret_unset",
+    });
     return null;
   }
   if (typeof token !== "string" || token.length === 0 || token.length > 2048) {

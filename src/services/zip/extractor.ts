@@ -1,6 +1,7 @@
-import pako from 'pako';
-import type { ZipFileEntry } from '@/types/zip';
-import type { R2Bucket } from '@cloudflare/workers-types';
+import { log } from "../../lib/log";
+import pako from "pako";
+import type { ZipFileEntry } from "@/types/zip";
+import type { R2Bucket } from "@cloudflare/workers-types";
 
 /**
  * Extract a single file from a ZIP using range requests
@@ -10,7 +11,7 @@ export async function extractFile(
   bucket: R2Bucket | any,
   zipKey: string,
   entry: ZipFileEntry,
-  etag?: string
+  etag?: string,
 ): Promise<ArrayBuffer> {
   // First, fetch the local file header to get the exact offset to compressed data
   // Local file header structure:
@@ -26,13 +27,13 @@ export async function extractFile(
   // - Filename length (2 bytes)
   // - Extra field length (2 bytes)
   // Total: 30 bytes, followed by filename and extra field
-  
+
   const headerObject = await (bucket as any).get(zipKey, {
     ...(etag ? { onlyIf: { etagMatches: etag } } : {}),
     range: {
       offset: entry.offset,
-      length: 30
-    }
+      length: 30,
+    },
   });
 
   if (!headerObject || !headerObject.body) {
@@ -40,21 +41,21 @@ export async function extractFile(
   }
 
   const headerBytes = new Uint8Array(await headerObject.arrayBuffer());
-  
+
   // Read filename length and extra field length (bytes 26-27 and 28-29)
   const filenameLength = headerBytes[26] | (headerBytes[27] << 8);
   const extraFieldLength = headerBytes[28] | (headerBytes[29] << 8);
-  
+
   // Calculate actual data offset
   const dataOffset = entry.offset + 30 + filenameLength + extraFieldLength;
-  
+
   // Fetch only the compressed bytes for this file using range request
   const object = await (bucket as any).get(zipKey, {
     ...(etag ? { onlyIf: { etagMatches: etag } } : {}),
     range: {
       offset: dataOffset,
-      length: entry.compressedSize
-    }
+      length: entry.compressedSize,
+    },
   });
 
   if (!object || !object.body) {
@@ -78,7 +79,7 @@ export async function extractFile(
     }
   } else {
     throw new Error(
-      `Unsupported compression method ${entry.compressionMethod} for file ${entry.name}`
+      `Unsupported compression method ${entry.compressionMethod} for file ${entry.name}`,
     );
   }
 }
@@ -89,7 +90,7 @@ export async function extractFile(
 export async function extractFiles(
   bucket: R2Bucket | any,
   zipKey: string,
-  entries: ZipFileEntry[]
+  entries: ZipFileEntry[],
 ): Promise<Map<string, ArrayBuffer>> {
   const results = new Map<string, ArrayBuffer>();
 
@@ -97,8 +98,8 @@ export async function extractFiles(
     try {
       const data = await extractFile(bucket, zipKey, entry);
       results.set(entry.name, data);
-    } catch (error) {
-      console.error(`Failed to extract ${entry.name}: ${error}`);
+    } catch {
+      log.error("zip entry extract failed", { err_code: "zip_extract_failed" });
       // Continue with other files
     }
   }

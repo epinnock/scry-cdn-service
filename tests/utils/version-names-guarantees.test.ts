@@ -93,7 +93,7 @@ describe('guarantee-1 every upload-legal version resolves to its own zip', () =>
       expect(extractProjectFromReferer(`https://view.scrymore.com/${P}/${bad}/x.html`)?.versionId, bad).toBe('');
     }
     expect(warn).toHaveBeenCalledTimes(6); // once per name, only from the logged (zip-route) parse
-    expect(warn.mock.calls[0][0]).toMatch(/rejected by upload grammar/);
+    expect(String(warn.mock.calls[0][0])).toContain('version_segment_rejected');
   });
 });
 
