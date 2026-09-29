@@ -48,6 +48,8 @@ export interface SessionValidationResult {
   valid: boolean;
   uid?: string;
   email?: string;
+  /** `auth_time` (falls back to `iat`), epoch seconds: when the user signed in. */
+  authTime?: number;
   error?: string;
 }
 
@@ -102,10 +104,14 @@ export async function validateFirebaseSessionCookie(
       return { valid: false, error: "Missing user ID in token" };
     }
 
+    const rawAuthTime = payload.auth_time ?? payload.iat;
+    const authTime = typeof rawAuthTime === "number" ? rawAuthTime : undefined;
+
     return {
       valid: true,
       uid,
       email,
+      authTime,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

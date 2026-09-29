@@ -11,6 +11,10 @@ vi.mock('@/auth/firebase-session', () => ({
   validateFirebaseSessionCookie: vi.fn(),
   parseCookies: vi.fn(),
 }));
+vi.mock('@/auth/session-revocation', async (orig) => ({
+  ...(await orig<any>()),
+  getSessionValidAfter: vi.fn(),
+}));
 vi.mock('@/auth/scry-pat', () => ({
   isScryPat: (t: string) => t.startsWith('scry_pat_'),
   verifyScryPat: vi.fn(),
@@ -19,6 +23,7 @@ vi.mock('@/auth/scry-pat', () => ({
 import { getProjectVisibility, isProjectMember } from '@/services/visibility';
 import { validateFirebaseSessionCookie, parseCookies } from '@/auth/firebase-session';
 import { verifyScryPat } from '@/auth/scry-pat';
+import { getSessionValidAfter } from '@/auth/session-revocation';
 import { signPreviewToken } from '../auth/preview-token.test';
 import { captureConsole } from '../helpers/capture-console';
 
@@ -27,6 +32,7 @@ describe('privateProjectAuth middleware', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (getSessionValidAfter as any).mockResolvedValue(0); // never signed out
 
     app = new Hono();
     app.use('/*', privateProjectAuth);
@@ -440,6 +446,60 @@ describe('privateProjectAuth middleware', () => {
       } finally {
         cap.restore();
       }
+    });
+  });
+
+  describe('sign-out revocation (signout-session-race)', () => {
+    const cookieReq = () =>
+      new Request('https://view.scrymore.com/private-project/v1/index.html', {
+        headers: { Cookie: '__session=valid-token' },
+      });
+    beforeEach(() => {
+      (getProjectVisibility as any).mockResolvedValue({ visibility: 'private', memberIds: ['user-123'] });
+      (parseCookies as any).mockReturnValue({ __session: 'valid-token' });
+      (isProjectMember as any).mockReturnValue(true);
+    });
+
+    it('refuses a cookie issued before the user signed out (401), even though signature and expiry are fine', async () => {
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123', authTime: 900 });
+      (getSessionValidAfter as any).mockResolvedValue(1000);
+      const res = await app.fetch(cookieReq(), mockEnv as any);
+      expect(res.status).toBe(401);
+    });
+
+    it('refuses a cookie signed in exactly at the cut-off', async () => {
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123', authTime: 1000 });
+      (getSessionValidAfter as any).mockResolvedValue(1000);
+      expect((await app.fetch(cookieReq(), mockEnv as any)).status).toBe(401);
+    });
+
+    it('accepts a cookie from a sign-in after the sign-out', async () => {
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123', authTime: 1001 });
+      (getSessionValidAfter as any).mockResolvedValue(1000);
+      expect((await app.fetch(cookieReq(), mockEnv as any)).status).toBe(200);
+    });
+
+    it('accepts a cookie when the user never signed out', async () => {
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123', authTime: 5 });
+      (getSessionValidAfter as any).mockResolvedValue(0);
+      expect((await app.fetch(cookieReq(), mockEnv as any)).status).toBe(200);
+    });
+
+    it('denies with 503 (never allows) when the cut-off cannot be read', async () => {
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: true, uid: 'user-123', authTime: 900 });
+      (getSessionValidAfter as any).mockRejectedValue(new Error('firestore down'));
+      const cap = captureConsole();
+      try {
+        expect((await app.fetch(cookieReq(), mockEnv as any)).status).toBe(503);
+      } finally {
+        cap.restore();
+      }
+    });
+
+    it('does not consult revocation for a public project, a PAT or an invalid cookie', async () => {
+      (validateFirebaseSessionCookie as any).mockResolvedValue({ valid: false, error: 'bad' });
+      expect((await app.fetch(cookieReq(), mockEnv as any)).status).toBe(401);
+      expect(getSessionValidAfter).not.toHaveBeenCalled();
     });
   });
 });

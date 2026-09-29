@@ -5,6 +5,10 @@ import {
   validateFirebaseSessionCookie,
 } from "@/auth/firebase-session";
 import { getProjectVisibility, isProjectMember } from "@/services/visibility";
+import {
+  getSessionValidAfter,
+  isSessionRevoked,
+} from "@/auth/session-revocation";
 import { isScryPat, verifyScryPat } from "@/auth/scry-pat";
 import {
   PREVIEW_COOKIE_NAME,
@@ -193,6 +197,31 @@ export async function privateProjectAuth(
     console.info("[AUTH] Session invalid:", {
       projectId,
       error: validation.error,
+    });
+    return c.text("Unauthorized", 401);
+  }
+
+  // Sign-out revokes every session issued before it (the dashboard's logout writes
+  // sessionRevocations/{uid}.validAfter). A cookie signed in at or before that
+  // instant is dead although its signature and expiry are fine. If the cut-off
+  // cannot be read we cannot tell, so deny (503), never allow.
+  let validAfter: number;
+  try {
+    validAfter = await getSessionValidAfter(validation.uid, c.env);
+  } catch (error) {
+    console.error("[AUTH] Session revocation lookup failed, denying:", {
+      uidTag: tag,
+      projectId,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return c.text("Unable to verify session", 503);
+  }
+  if (isSessionRevoked(validation.authTime, validAfter)) {
+    console.info("[AUTH] Session predates sign-out, denying:", {
+      uidTag: tag,
+      projectId,
+      authTime: validation.authTime,
+      validAfter,
     });
     return c.text("Unauthorized", 401);
   }
