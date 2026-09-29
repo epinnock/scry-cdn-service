@@ -39,6 +39,13 @@ export interface Env {
    */
   LOG_HASH_SALT?: string;
 
+  /** "1" turns debug log lines on (log-standardization). Off by default. */
+  SCRY_LOG_DEBUG?: string;
+
+  /** Sentry DSN (secret). Unset = error reporting is a no-op (cloudflare/worker.ts). */
+  SENTRY_DSN?: string;
+  SENTRY_TRACES_SAMPLE_RATE?: string;
+
   // Docker/R2 specific
   STORAGE_TYPE?: "r2" | "filesystem";
   STORAGE_PATH?: string;

@@ -74,6 +74,11 @@ binding = "CDN_CACHE"
 id = "a67fa5bbfdaf462394e802bb08ca9247"
 preview_id = "a67fa5bbfdaf462394e802bb08ca9247"
 
+# Schema-v1 log lines are shipped to the central R2 store by the scry-logs tail consumer
+# (log-standardization). Staging only; production is added at promotion.
+[[env.staging.tail_consumers]]
+service = "scry-logs-staging"
+
 # Build configuration
 # Removed conflicting build.upload section - main field above is sufficient
 # [build]
@@ -91,6 +96,8 @@ preview_id = "a67fa5bbfdaf462394e802bb08ca9247"
 # - PREVIEW_TOKEN_SECRET (HMAC secret shared with the dashboard; signed preview
 #   tokens for private projects — docs/PRIVATE_PREVIEW_SIGNED_COOKIES.md)
 # - PREVIEW_TOKEN_SECRET_PREVIOUS (optional, the retiring secret during rotation)
+# - SENTRY_DSN (Sentry error reporting; unset = disabled, cloudflare/worker.ts)
+# Optional vars: SCRY_LOG_DEBUG="1" (debug log lines), SENTRY_TRACES_SAMPLE_RATE (default 0.1)
 
 # Observability configuration
 [observability]

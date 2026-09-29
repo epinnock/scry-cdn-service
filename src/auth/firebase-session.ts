@@ -1,3 +1,4 @@
+import { log } from "../lib/log";
 import * as jose from "jose";
 
 const GOOGLE_CERTS_URL =
@@ -59,16 +60,12 @@ export async function validateFirebaseSessionCookie(
   cache?: KVNamespace,
 ): Promise<SessionValidationResult> {
   try {
-    console.info(
-      "[AUTH] Validating session cookie, length:",
-      sessionCookie.length,
-    );
+    log.debug("validating session cookie");
 
     const header = jose.decodeProtectedHeader(sessionCookie);
-    console.info("[AUTH] JWT header:", { alg: header.alg, kid: header.kid });
 
     if (!header.kid) {
-      console.error("[AUTH] Missing key ID in JWT header");
+      log.error("jwt missing key id", { err_code: "jwt_missing_kid" });
       return { valid: false, error: "Missing key ID in JWT header" };
     }
 
@@ -76,18 +73,13 @@ export async function validateFirebaseSessionCookie(
     const publicKeyPem = publicKeys[header.kid];
 
     if (!publicKeyPem) {
-      console.error("[AUTH] Unknown key ID:", header.kid);
-      console.info("[AUTH] Available key IDs:", Object.keys(publicKeys));
+      log.error("jwt unknown key id", { err_code: "jwt_unknown_kid" });
       return { valid: false, error: "Unknown key ID" };
     }
-
-    console.info("[AUTH] Found matching public key for kid:", header.kid);
 
     const publicKey = await jose.importX509(publicKeyPem, "RS256");
 
     const expectedIssuer = `https://session.firebase.google.com/${firebaseProjectId}`;
-    console.info("[AUTH] Expected issuer:", expectedIssuer);
-    console.info("[AUTH] Expected audience:", firebaseProjectId);
 
     const { payload } = await jose.jwtVerify(sessionCookie, publicKey, {
       issuer: expectedIssuer,
@@ -100,7 +92,7 @@ export async function validateFirebaseSessionCookie(
     // Never log the payload, email or uid here: the caller logs an opaque
     // uid tag and the outcome (audit 2026-09-26, gap 6).
     if (!uid) {
-      console.error("[AUTH] Missing user ID (sub) in token payload");
+      log.error("jwt missing subject", { err_code: "jwt_missing_sub" });
       return { valid: false, error: "Missing user ID in token" };
     }
 
@@ -115,10 +107,9 @@ export async function validateFirebaseSessionCookie(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[AUTH] Session validation failed:", message);
-    if (error instanceof Error && error.stack) {
-      console.error("[AUTH] Stack trace:", error.stack);
-    }
+    log.error("session validation failed", {
+      err_code: "session_validation_failed",
+    });
     return { valid: false, error: message };
   }
 }

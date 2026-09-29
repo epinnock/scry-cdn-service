@@ -1,3 +1,4 @@
+import { log, reportError } from "../lib/log";
 import { Hono } from "hono";
 import { parsePathForUUID } from "@/utils/subdomain";
 import { getMimeType } from "@/utils/mime-types";
@@ -32,21 +33,14 @@ zipStaticRoutes.get("/*", async (c) => {
   // Extract UUID from path (view.domain.com/{uuid}/path)
   const pathInfo = parsePathForUUID(url.pathname, { logRejected: true });
 
-  console.log("[DEBUG] URL pathname:", url.pathname);
-  console.log("[DEBUG] Parsed pathInfo:", JSON.stringify(pathInfo, null, 2));
+  log.debug("path parsed");
 
   if (!pathInfo || !pathInfo.isValid || !pathInfo.resolution) {
-    console.error("[ERROR] Invalid path format:", {
-      pathInfo,
-      pathname: url.pathname,
-    });
+    log.warn("invalid path format", { err_code: "invalid_path" });
     return c.text("Invalid format. Expected: view.domain.com/{uuid}/path", 400);
   }
 
-  const { uuid, filePath, resolution } = pathInfo;
-  console.log("[DEBUG] UUID:", uuid);
-  console.log("[DEBUG] File path:", filePath);
-  console.log("[DEBUG] Resolution:", JSON.stringify(resolution, null, 2));
+  const { filePath, resolution } = pathInfo;
 
   // NEW: Select bucket based on resolution type
   const storage =
@@ -57,9 +51,7 @@ zipStaticRoutes.get("/*", async (c) => {
   // NEW: Use resolved ZIP key from path resolver
   const zipKey = resolution.zipKey;
 
-  console.log("[DEBUG] Selected bucket:", resolution.bucket);
-  console.log("[DEBUG] ZIP key:", zipKey);
-  console.log("[DEBUG] Storage bucket available:", storage ? "YES" : "NO");
+  log.debug("bucket selected");
 
   // Coverage report requests are stored as standalone JSON objects in R2:
   //   {projectId}/{versionId}/coverage-report.json
@@ -117,21 +109,12 @@ zipStaticRoutes.get("/*", async (c) => {
 
   try {
     // Get central directory (cached in KV)
-    console.log("[DEBUG] Fetching central directory for:", zipKey);
+    log.debug("fetching central directory");
     const centralDir = await getCentralDirectory(storage, cache, zipKey);
-    console.log(
-      "[DEBUG] Central directory entries count:",
-      Object.keys(centralDir.entries).length,
-    );
-    console.log(
-      "[DEBUG] Available files:",
-      Object.keys(centralDir.entries).slice(0, 10).join(", "),
-    );
 
     // Find the requested file
     const fileEntry = centralDir.entries[cleanPath];
-    console.log("[DEBUG] Looking for file:", cleanPath);
-    console.log("[DEBUG] File found:", fileEntry ? "YES" : "NO");
+    log.debug("looking for file");
 
     if (!fileEntry) {
       // Try index.html for potential SPA routing
@@ -139,7 +122,12 @@ zipStaticRoutes.get("/*", async (c) => {
         const indexEntry = centralDir.entries["index.html"];
 
         if (indexEntry) {
-          const data = await extractFile(storage, zipKey, indexEntry, centralDir.etag);
+          const data = await extractFile(
+            storage,
+            zipKey,
+            indexEntry,
+            centralDir.etag,
+          );
           return new Response(data, {
             headers: {
               "Content-Type": "text/html",
@@ -154,7 +142,12 @@ zipStaticRoutes.get("/*", async (c) => {
     }
 
     // Extract file using range request
-    const fileData = await extractFile(storage, zipKey, fileEntry, centralDir.etag);
+    const fileData = await extractFile(
+      storage,
+      zipKey,
+      fileEntry,
+      centralDir.etag,
+    );
 
     // Determine content type
     const contentType = getMimeType(cleanPath);
@@ -170,16 +163,6 @@ zipStaticRoutes.get("/*", async (c) => {
 
     return new Response(fileData, { headers });
   } catch (error) {
-    console.error("[ERROR] Error serving file from ZIP:", error);
-    console.error("[ERROR] Details:", {
-      bucket: resolution.bucket,
-      zipKey: zipKey,
-      uuid: uuid,
-      filePath: filePath,
-      cleanPath: cleanPath,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
-    });
     // A build that was never uploaded is not a server fault. Reporting 500
     // made an absent version indistinguishable from a corrupt one, which sent
     // an entire debugging session looking for a broken build that did not
@@ -188,6 +171,9 @@ zipStaticRoutes.get("/*", async (c) => {
     if (/ZIP file not found/i.test(message)) {
       return c.text("Not found", 404);
     }
+    // A real serving fault (corrupt zip, R2 error): the response is a plain 500, so it never reaches
+    // app.onError. Report it with the request id.
+    reportError(error, "error serving file from zip", "zip_serve_failed");
 
     return c.text("Internal Server Error", 500);
   }

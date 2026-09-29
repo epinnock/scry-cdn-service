@@ -214,7 +214,7 @@ describe('Central Directory Service', () => {
       await getCentralDirectory(mockBucket as any, mockKV as any, 'test.zip');
 
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to read central directory from KV cache')
+        expect.stringContaining('cd_cache_read_failed')
       );
       expect(mockR2RangeReader).toHaveBeenCalled();
       warnSpy.mockRestore();
@@ -247,7 +247,7 @@ describe('Central Directory Service', () => {
       await expect(clearCentralDirectoryCache(mockKV as any, 'test.zip')).resolves.toBeUndefined();
 
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to clear central directory cache')
+        expect.stringContaining('cd_cache_clear_failed')
       );
       warnSpy.mockRestore();
     });

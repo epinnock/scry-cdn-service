@@ -1,3 +1,4 @@
+import { log } from "../lib/log";
 import type { Context, Next } from "hono";
 import type { Env } from "@/types/env";
 import {
@@ -49,12 +50,14 @@ export async function privateProjectAuth(
   const pathParts = url.pathname.split("/").filter(Boolean);
 
   const projectId = pathParts[0];
+  if (projectId && /^[A-Za-z0-9_-]{1,128}$/.test(projectId))
+    c.set("projectId", projectId);
 
   if (!projectId) {
     return c.text("Invalid path", 400);
   }
 
-  console.info("[AUTH] Checking access for project:", projectId);
+  log.debug("checking access");
 
   const project = await getProjectVisibility(projectId, c.env);
 
@@ -64,21 +67,14 @@ export async function privateProjectAuth(
     // project_id lacking a record — to unauthenticated callers. Transient
     // Firestore failures never reach here: getProjectVisibility() converts them
     // to { visibility: "private", memberIds: [] }, so null is specifically a 404.
-    console.info(
-      "[AUTH] Project not found in Firestore, denying access:",
-      projectId,
-    );
+    log.debug("project not found");
     return c.text("Not found", 404);
   }
 
-  console.info("[AUTH] Project visibility:", {
-    projectId,
-    visibility: project.visibility,
-    memberCount: project.memberIds.length,
-  });
+  log.debug("project visibility");
 
   if (project.visibility === "public") {
-    console.info("[AUTH] Public project, allowing access:", projectId);
+    log.debug("public project allowed");
     return next();
   }
 
@@ -93,17 +89,11 @@ export async function privateProjectAuth(
     if (isScryPat(bearer)) {
       const pat = await verifyScryPat(bearer, c.env);
       if (!pat) {
-        console.warn(
-          "[AUTH] Rejected Scry PAT for private project:",
-          projectId,
-        );
+        log.warn("pat rejected", { err_code: "pat_rejected" });
         return c.text("Unauthorized", 401);
       }
       if (!isProjectMember(project.memberIds, pat.uid)) {
-        console.warn("[AUTH] PAT owner is not a project member:", {
-          uidTag: await uidTag(pat.uid, c.env.LOG_HASH_SALT),
-          projectId,
-        });
+        log.warn("pat owner not member", { err_code: "pat_not_member" });
         return c.text("Forbidden", 403);
       }
       return servePrivate(c, next);
@@ -120,22 +110,20 @@ export async function privateProjectAuth(
   if (previewParam !== null) {
     const verified = await verifyPreviewToken(previewParam, projectId, c.env);
     if (!verified) {
-      console.warn("[AUTH] Rejected preview token for project:", projectId);
+      log.warn("preview token rejected", {
+        err_code: "preview_token_rejected",
+      });
       return c.text("Unauthorized", 401);
     }
     url.searchParams.delete(PREVIEW_QUERY_PARAM);
-    console.info("[AUTH] Preview token exchanged for cookie:", {
-      uidTag: await uidTag(verified.uid, c.env.LOG_HASH_SALT),
-      projectId,
-      remainingSeconds: verified.remainingSeconds,
-    });
+    log.debug("preview token exchanged");
     c.header("Set-Cookie", previewCookie(previewParam, verified));
     c.header("Cache-Control", "no-store");
     return c.redirect(url.pathname + url.search, 302);
   }
 
   const cookieHeader = c.req.header("Cookie");
-  console.info("[AUTH] Cookie header present:", !!cookieHeader);
+  log.debug("cookie header present");
 
   const cookies = parseCookies(cookieHeader ?? null);
 
@@ -151,39 +139,32 @@ export async function privateProjectAuth(
       c.env,
     );
     if (verified) {
-      console.info("[AUTH] Preview cookie accepted:", {
-        uidTag: await uidTag(verified.uid, c.env.LOG_HASH_SALT),
-        projectId,
-      });
+      log.debug("preview cookie accepted");
       return servePrivate(c, next);
     }
-    console.info("[AUTH] Preview cookie invalid or expired:", projectId);
+    log.debug("preview cookie invalid");
   }
 
   const sessionCookie = cookies[SESSION_COOKIE_NAME];
 
-  console.info("[AUTH] Session cookie present:", !!sessionCookie);
+  log.debug("session cookie present");
 
   if (!sessionCookie) {
     // Only a count: cookie names and values are never logged (audit gap 6).
-    console.info("[AUTH] No session cookie for private project:", {
-      projectId,
-      cookieCount: Object.keys(cookies).length,
-    });
+    log.debug("no session cookie");
     return c.text("Unauthorized", 401);
   }
 
   const firebaseProjectId = c.env.FIREBASE_PROJECT_ID;
 
   if (!firebaseProjectId) {
-    console.error("[AUTH] FIREBASE_PROJECT_ID not configured");
+    log.error("firebase project not configured", {
+      err_code: "firebase_project_unset",
+    });
     return c.text("Server configuration error", 500);
   }
 
-  console.info(
-    "[AUTH] Validating session cookie for Firebase project:",
-    firebaseProjectId,
-  );
+  log.debug("validating session cookie");
 
   const validation = await validateFirebaseSessionCookie(
     sessionCookie,
@@ -192,12 +173,11 @@ export async function privateProjectAuth(
   );
 
   const tag = await uidTag(validation.uid, c.env.LOG_HASH_SALT);
+  // The request line carries the salted uid hash (never the uid); "none" without a salt.
+  if (tag !== "none") c.set("uidHash", tag);
 
   if (!validation.valid || !validation.uid) {
-    console.info("[AUTH] Session invalid:", {
-      projectId,
-      error: validation.error,
-    });
+    log.warn("session invalid", { err_code: "session_invalid" });
     return c.text("Unauthorized", 401);
   }
 
@@ -208,36 +188,23 @@ export async function privateProjectAuth(
   let validAfter: number;
   try {
     validAfter = await getSessionValidAfter(validation.uid, c.env);
-  } catch (error) {
-    console.error("[AUTH] Session revocation lookup failed, denying:", {
-      uidTag: tag,
-      projectId,
-      error: error instanceof Error ? error.message : "unknown",
+  } catch {
+    log.error("session revocation lookup failed", {
+      err_code: "revocation_lookup_failed",
     });
     return c.text("Unable to verify session", 503);
   }
   if (isSessionRevoked(validation.authTime, validAfter)) {
-    console.info("[AUTH] Session predates sign-out, denying:", {
-      uidTag: tag,
-      projectId,
-      authTime: validation.authTime,
-      validAfter,
-    });
+    log.warn("session predates signout", { err_code: "session_revoked" });
     return c.text("Unauthorized", 401);
   }
 
   if (!isProjectMember(project.memberIds, validation.uid)) {
-    console.info("[AUTH] Session valid, not a member:", {
-      uidTag: tag,
-      projectId,
-    });
+    log.debug("session valid not member");
     return c.text("Forbidden", 403);
   }
 
-  console.info("[AUTH] Session valid, access granted:", {
-    uidTag: tag,
-    projectId,
-  });
+  log.debug("access granted");
 
   return servePrivate(c, next);
 }

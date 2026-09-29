@@ -1,3 +1,4 @@
+import { log } from "../lib/log";
 /**
  * CORS middleware utilities.
  *
@@ -112,23 +113,18 @@ export function corsHeaders(
   // Debug logging for CORS decision
   const originInAllowlist = origin ? allowedOrigins.includes(origin) : false;
   if (config.debug) {
-    console.log("[CORS] Processing request:", {
-      origin,
-      forceWildcard: config.forceWildcard,
-      originInAllowlist,
-      allowedOriginsCount: allowedOrigins.length,
-    });
+    log.debug("cors request");
   }
 
   if (config.forceWildcard) {
     if (config.debug) {
-      console.log("[CORS] Using wildcard due to forceWildcard=true");
+      log.debug("cors wildcard forced");
     }
     headers.set("Access-Control-Allow-Origin", "*");
   } else if (origin && originInAllowlist) {
     // Reflect whitelisted origins - required for credentials to work
     if (config.debug) {
-      console.log("[CORS] Reflecting origin:", origin);
+      log.debug("cors origin reflected");
     }
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Vary", "Origin");
@@ -136,7 +132,7 @@ export function corsHeaders(
   } else {
     // Public, non-credentialed access.
     if (config.debug) {
-      console.log("[CORS] Using wildcard - origin not in allowlist:", origin);
+      log.debug("cors wildcard no allowlist");
     }
     headers.set("Access-Control-Allow-Origin", "*");
   }

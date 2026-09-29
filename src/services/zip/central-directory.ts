@@ -1,7 +1,8 @@
-import { unzip } from 'unzipit';
-import { R2RangeReader } from '@/adapters/zip/r2-range-reader';
-import type { ZipCentralDirectory } from '@/types/zip';
-import type { R2Bucket, R2Object } from '@cloudflare/workers-types';
+import { log } from "../../lib/log";
+import { unzip } from "unzipit";
+import { R2RangeReader } from "@/adapters/zip/r2-range-reader";
+import type { ZipCentralDirectory } from "@/types/zip";
+import type { R2Bucket, R2Object } from "@cloudflare/workers-types";
 
 /**
  * Get central directory from cache or read from R2.
@@ -11,7 +12,7 @@ import type { R2Bucket, R2Object } from '@cloudflare/workers-types';
 export async function getCentralDirectory(
   bucket: R2Bucket,
   kv: KVNamespace | undefined,
-  zipKey: string
+  zipKey: string,
 ): Promise<ZipCentralDirectory> {
   const cacheKey = `cd:${zipKey}`;
   // Paths are mutable (for example /main/). Validate against R2 even on a
@@ -22,12 +23,14 @@ export async function getCentralDirectory(
   // Try KV cache first (if available)
   if (kv) {
     try {
-      const cached = await kv.get<ZipCentralDirectory>(cacheKey, 'json');
+      const cached = await kv.get<ZipCentralDirectory>(cacheKey, "json");
       if (object.etag && cached?.etag === object.etag) {
         return cached;
       }
-    } catch (error) {
-      console.warn(`Failed to read central directory from KV cache: ${error}`);
+    } catch {
+      log.warn("central directory cache read failed", {
+        err_code: "cd_cache_read_failed",
+      });
       // Continue to read from R2
     }
   }
@@ -41,8 +44,10 @@ export async function getCentralDirectory(
       await kv.put(cacheKey, JSON.stringify(centralDir), {
         expirationTtl: 86400,
       });
-    } catch (error) {
-      console.warn(`Failed to cache central directory in KV: ${error}`);
+    } catch {
+      log.warn("central directory cache write failed", {
+        err_code: "cd_cache_write_failed",
+      });
       // Continue even if caching fails
     }
   }
@@ -56,7 +61,7 @@ export async function getCentralDirectory(
 async function readCentralDirectoryFromR2(
   bucket: R2Bucket,
   zipKey: string,
-  object: R2Object
+  object: R2Object,
 ): Promise<ZipCentralDirectory> {
   const reader = new R2RangeReader(bucket, zipKey, object);
 
@@ -67,21 +72,21 @@ async function readCentralDirectoryFromR2(
       entries: {},
       etag: object.etag,
       totalSize: await reader.getLength(),
-      cachedAt: new Date().toISOString()
+      cachedAt: new Date().toISOString(),
     };
 
     // Convert unzipit entries to our format
     for (const [name, entry] of Object.entries(entries)) {
       // Get offset from the raw entry
       const offset = (entry as any)._rawEntry?.relativeOffsetOfLocalHeader || 0;
-        
+
       centralDir.entries[name] = {
         name,
         size: (entry as any).size,
         compressedSize: (entry as any).compressedSize,
         offset,
         crc32: (entry as any).crc32 || (entry as any)._rawEntry?.crc32,
-        compressionMethod: (entry as any).compressionMethod
+        compressionMethod: (entry as any).compressionMethod,
       };
     }
 
@@ -97,12 +102,14 @@ async function readCentralDirectoryFromR2(
  */
 export async function clearCentralDirectoryCache(
   kv: KVNamespace,
-  zipKey: string
+  zipKey: string,
 ): Promise<void> {
   const cacheKey = `cd:${zipKey}`;
   try {
     await kv.delete(cacheKey);
-  } catch (error) {
-    console.warn(`Failed to clear central directory cache: ${error}`);
+  } catch {
+    log.warn("central directory cache clear failed", {
+      err_code: "cd_cache_clear_failed",
+    });
   }
 }

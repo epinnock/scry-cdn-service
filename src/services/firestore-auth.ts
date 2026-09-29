@@ -1,3 +1,4 @@
+import { log } from "../lib/log";
 import * as jose from "jose";
 import type { Env } from "@/types/env";
 
@@ -37,7 +38,7 @@ export async function getFirestoreAccessToken(
 
   // If service account credentials are not configured, return null
   if (!clientEmail || !privateKey) {
-    console.info("[FIRESTORE_AUTH] Service account credentials not configured");
+    log.debug("service account not configured");
     return null;
   }
 
@@ -55,8 +56,10 @@ export async function getFirestoreAccessToken(
       if (cached && cached.expiresAt > now + TOKEN_REFRESH_BUFFER_MS) {
         return cached.accessToken;
       }
-    } catch (error) {
-      console.error("[FIRESTORE_AUTH] Failed to read token cache:", error);
+    } catch {
+      log.error("token cache read failed", {
+        err_code: "token_cache_read_failed",
+      });
     }
   }
 
@@ -81,8 +84,8 @@ export async function getFirestoreAccessToken(
     }
 
     return tokenResponse.access_token;
-  } catch (error) {
-    console.error("[FIRESTORE_AUTH] Failed to get access token:", error);
+  } catch {
+    log.error("access token failed", { err_code: "access_token_failed" });
     return null;
   }
 }
