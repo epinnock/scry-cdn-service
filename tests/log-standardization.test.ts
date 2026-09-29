@@ -197,3 +197,76 @@ describe('guarantee-4 requests succeed when logging is broken', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe('guarantee-1 client-controlled request values never reach the line (UAT F41)', () => {
+  const C = 'CANARYPATHUATV1B';
+  const CQ = 'CANARYQUERYUATV1B';
+  const CH = 'canaryhost-uatv1b.example';
+  const CC = 'CANARYCLIENTUATV1B';
+  const hdrs = {
+    host: CH,
+    'x-forwarded-host': CH,
+    'x-forwarded-for': '203.0.113.99',
+    'x-forwarded-proto': 'CANARYPROTOUATV1B',
+    'x-scry-client': CC,
+    'x-scry-run-id': 'CANARYRUNUATV1B',
+    'x-scry-build-id': 'CANARYBUILDUATV1B',
+  };
+  const markers = [C, CQ, CH, CC, 'CANARYPROTOUATV1B', 'CANARYRUNUATV1B', 'CANARYBUILDUATV1B', '203.0.113.99'];
+  const expectClean = () => {
+    const all = lines.join('\n');
+    for (const m of markers) expect(all, m).not.toContain(m);
+    expect(requestLines().length).toBeGreaterThan(0);
+    for (const l of requestLines()) {
+      expect(l.project).toBeUndefined();
+      expect(l.client).toBeUndefined();
+      expect(l.run_id).toBeUndefined();
+      expect(l.build_id).toBeUndefined();
+    }
+  };
+
+  it('unmatched route (POST to a canary path) logs no project', async () => {
+    const res = await createApp().fetch(
+      new Request(`https://view.scrymore.com/${C}/x?q=${CQ}`, { method: 'POST', headers: hdrs }),
+      env(),
+    );
+    expect(res.status).toBe(404);
+    expect(requestLines()[0].route).toBe('unmatched');
+    expectClean();
+  });
+
+  it('matched route, nonexistent project: 404 with no project', async () => {
+    const cache = { get: vi.fn().mockResolvedValue(null), put: vi.fn(async () => {}) };
+    const e = env({ CDN_CACHE: cache, FIREBASE_PROJECT_ID: 'p-test' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 404 }));
+    const res = await get(`/${C}/v1/index.html?q=${CQ}`, e, hdrs);
+    expect(res.status).toBe(404);
+    expectClean();
+  });
+
+  it('matched route, unauthorized project: 401 with no project', async () => {
+    const res = await get(`/${C}/v1/index.html?q=${CQ}`, env({}, 'private'), hdrs);
+    expect(res.status).toBe(401);
+    expect(requestLines()[0].route).toBe('/*');
+    expectClean();
+  });
+
+  it('matched route, unauthorized project with a bogus bearer and cookie: no canary anywhere', async () => {
+    const res = await get(`/${C}/v1/index.html`, env({ FIREBASE_PROJECT_ID: 'p-test' }, 'private'), {
+      ...hdrs,
+      cookie: `__session=${CQ}`,
+    });
+    expect(res.status).toBe(401);
+    expectClean();
+  });
+
+  it('a legitimate viewer request still logs its real project id', async () => {
+    const res = await get(`/${P}/v1.0.0/index.html?q=${CQ}`, env(), hdrs);
+    expect(res.status).toBe(404);
+    const [line] = requestLines();
+    expect(line).toMatchObject({ route: '/*', project: P });
+    const all = lines.join('\n');
+    for (const m of markers) expect(all, m).not.toContain(m);
+    expect(line.client).toBeUndefined();
+  });
+});

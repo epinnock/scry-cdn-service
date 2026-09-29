@@ -42,6 +42,15 @@ export interface AuthContext {
   isAuthenticated: boolean;
 }
 
+/**
+ * Record the project for the request line. Called ONLY once the project exists in storage
+ * (looked up) AND the caller is authorized for it, never from the raw path: a client-chosen
+ * path segment must not reach the log store (guarantee G1, UAT F41).
+ */
+function markVerifiedProject(c: Context<{ Bindings: Env }>, projectId: string) {
+  if (/^[A-Za-z0-9_-]{1,128}$/.test(projectId)) c.set("projectId", projectId);
+}
+
 export async function privateProjectAuth(
   c: Context<{ Bindings: Env }>,
   next: Next,
@@ -50,8 +59,6 @@ export async function privateProjectAuth(
   const pathParts = url.pathname.split("/").filter(Boolean);
 
   const projectId = pathParts[0];
-  if (projectId && /^[A-Za-z0-9_-]{1,128}$/.test(projectId))
-    c.set("projectId", projectId);
 
   if (!projectId) {
     return c.text("Invalid path", 400);
@@ -75,6 +82,7 @@ export async function privateProjectAuth(
 
   if (project.visibility === "public") {
     log.debug("public project allowed");
+    markVerifiedProject(c, projectId);
     return next();
   }
 
@@ -96,6 +104,7 @@ export async function privateProjectAuth(
         log.warn("pat owner not member", { err_code: "pat_not_member" });
         return c.text("Forbidden", 403);
       }
+      markVerifiedProject(c, projectId);
       return servePrivate(c, next);
     }
   }
@@ -117,6 +126,7 @@ export async function privateProjectAuth(
     }
     url.searchParams.delete(PREVIEW_QUERY_PARAM);
     log.debug("preview token exchanged");
+    markVerifiedProject(c, projectId);
     c.header("Set-Cookie", previewCookie(previewParam, verified));
     c.header("Cache-Control", "no-store");
     return c.redirect(url.pathname + url.search, 302);
@@ -140,6 +150,7 @@ export async function privateProjectAuth(
     );
     if (verified) {
       log.debug("preview cookie accepted");
+      markVerifiedProject(c, projectId);
       return servePrivate(c, next);
     }
     log.debug("preview cookie invalid");
@@ -205,6 +216,7 @@ export async function privateProjectAuth(
   }
 
   log.debug("access granted");
+  markVerifiedProject(c, projectId);
 
   return servePrivate(c, next);
 }

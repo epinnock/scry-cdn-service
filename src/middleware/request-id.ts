@@ -74,7 +74,6 @@ async function withRequestIdInBody(
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function requestIdMiddleware(
   c: Context<any>,
   next: Next,
@@ -108,22 +107,18 @@ export async function requestIdMiddleware(
 
   try {
     const fields: Record<string, string> = {};
-    for (const [param, key] of [["projectId", "project"]] as const) {
-      let v: string | undefined;
-      try {
-        v = c.req.param(param) as string | undefined;
-      } catch {
-        v = undefined;
-      }
-      if (v && SAFE_ID.test(v)) fields[key] = v;
-    }
+    const route = routePattern(c);
+    // G1: `project` is logged only when the route matched a known pattern AND the auth middleware
+    // verified the project (exists in storage and the caller is authorized). Never read from the
+    // raw path or c.req.param: an unmatched or unauthenticated path segment is client-controlled.
     const projectId = c.get("projectId") as string | undefined;
-    if (projectId && SAFE_ID.test(projectId)) fields.project = projectId;
+    if (route !== "unmatched" && projectId && SAFE_ID.test(projectId))
+      fields.project = projectId;
     const uid = c.get("uidHash") as string | undefined;
     if (uid && /^[0-9a-f]{12}$/.test(uid)) fields.uid_hash = uid;
     log.request({
       request_id: requestId,
-      route: routePattern(c),
+      route,
       status: c.res.status,
       ms: Date.now() - started,
       ...fields,
