@@ -4,13 +4,12 @@
 // Every pattern here is linear-time: no unbounded quantifier is nested or re-tried from every start position
 // (word-start lookbehinds and {0,N} bounds keep each start O(1)), and scrubString hard-truncates its input.
 
-export const REDACTED = "[redacted]";
+export const REDACTED = '[redacted]';
 /** Longest input scrubString looks at; the tail is dropped (safe: dropping only removes information). */
 export const MAX_SCRUB_INPUT = 4096;
 
-const NAME_SUFFIX =
-  "key|token|secret|password|passwd|pwd|sid|session|sessionid|csrf|auth|credential|signature|sig";
-const NOT_WORD = "(?<![A-Za-z0-9_-])";
+const NAME_SUFFIX = 'key|token|secret|password|passwd|pwd|sid|session|sessionid|csrf|auth|credential|signature|sig';
+const NOT_WORD = '(?<![A-Za-z0-9_-])';
 
 /** Ordered: more specific patterns first. Each match is replaced by [redacted]. */
 export const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
@@ -51,12 +50,12 @@ export const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
   // name=value or name%3Dvalue for secret-ish or query-ish names; value runs to the next & or end of line
   new RegExp(
     `${NOT_WORD}(?:[A-Za-z0-9_-]{0,32}(?:${NAME_SUFFIX}|query|search|prompt|text)|q)["']?\\s{0,3}(?:=|%3[Dd])[^&\\r\\n]*`,
-    "gi",
+    'gi',
   ),
   // name: value (headers, JSON) for secret-ish names, and quoted JSON keys for query-ish names
   new RegExp(
     `${NOT_WORD}["']?(?:[A-Za-z0-9_-]{0,32}(?:${NAME_SUFFIX})|query|q|prompt|search)["']?\\s{0,3}:\\s{0,3}(?:"[^"]{0,1024}"|'[^']{0,1024}'|[^\\s,;&}\\]]{0,1024})`,
-    "gi",
+    'gi',
   ),
   // Any remaining URL query string
   /\?[^\s"']+/g,
@@ -64,9 +63,8 @@ export const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
 
 /** Replace every secret-looking span in `input` with [redacted]. Never throws; linear time. */
 export function scrubString(input: string): string {
-  if (typeof input !== "string" || input.length === 0) return input;
-  let out =
-    input.length > MAX_SCRUB_INPUT ? input.slice(0, MAX_SCRUB_INPUT) : input;
+  if (typeof input !== 'string' || input.length === 0) return input;
+  let out = input.length > MAX_SCRUB_INPUT ? input.slice(0, MAX_SCRUB_INPUT) : input;
   for (const re of SECRET_PATTERNS) {
     re.lastIndex = 0;
     out = out.replace(re, REDACTED);

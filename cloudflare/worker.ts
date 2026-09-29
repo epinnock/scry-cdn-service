@@ -1,7 +1,12 @@
 import * as Sentry from "@sentry/cloudflare";
 import { createApp } from "../src/app";
 import { setExceptionReporter } from "../src/lib/log";
-import { scrubBreadcrumb, scrubEvent } from "../src/sentry-scrub";
+import {
+  scrubBreadcrumb,
+  scrubEvent,
+  scrubSpan,
+  scrubTransaction,
+} from "../src/sentry-scrub";
 import type { Env } from "../src/types/env";
 
 const app = createApp();
@@ -31,9 +36,16 @@ export function sentryOptions(env: Env) {
     sendDefaultPii: false,
     // Viewer requests carry session cookies, PATs and signed preview tokens: attach none of them.
     dataCollection: { userInfo: false, httpBodies: [] },
-    initialScope: { tags: { service: "cdn-service", runtime: "cloudflare-workers" } },
-    beforeBreadcrumb: (breadcrumb: Sentry.Breadcrumb) => scrubBreadcrumb(breadcrumb),
+    initialScope: {
+      tags: { service: "cdn-service", runtime: "cloudflare-workers" },
+    },
+    beforeBreadcrumb: (breadcrumb: Sentry.Breadcrumb) =>
+      scrubBreadcrumb(breadcrumb),
     beforeSend: scrubEvent,
+    // Transactions and spans skip beforeSend; without these the PAT bearer, the signed preview token and
+    // IPs ride out on every sampled trace (log-standardization B1).
+    beforeSendTransaction: scrubTransaction,
+    beforeSendSpan: scrubSpan,
   };
 }
 

@@ -1,16 +1,8 @@
 // scry-log logger: structured lines, allow-list + scrubber on every call, console and http sinks,
 // bounded fail-open queue (G4). Zero dependencies; Workers and Node 22.
-import {
-  sanitizeLine,
-  type Env,
-  type Level,
-  type LogLine,
-  type Service,
-} from "./schema";
+import { sanitizeLine, type Env, type Level, type LogLine, type Service } from './schema';
 
-export type LineFields = Partial<
-  Omit<LogLine, "v" | "ts" | "level" | "service" | "env" | "msg">
->;
+export type LineFields = Partial<Omit<LogLine, 'v' | 'ts' | 'level' | 'service' | 'env' | 'msg'>>;
 
 /** Something that receives already-sanitised lines. `write` must be synchronous and never throw. */
 export interface Sink {
@@ -37,13 +29,12 @@ function byteLength(s: string): number {
 /** A lost line counts once, plus whatever drop count it was carrying. */
 function lostIn(lines: LogLine[]): number {
   let n = 0;
-  for (const l of lines)
-    n += 1 + (typeof l.log_drop === "number" ? l.log_drop : 0);
+  for (const l of lines) n += 1 + (typeof l.log_drop === 'number' ? l.log_drop : 0);
   return n;
 }
 
 export interface ConsoleSinkOptions {
-  out?: Pick<Console, "log" | "warn" | "error">;
+  out?: Pick<Console, 'log' | 'warn' | 'error'>;
 }
 
 export function consoleSink(opts: ConsoleSinkOptions = {}): Sink {
@@ -52,8 +43,8 @@ export function consoleSink(opts: ConsoleSinkOptions = {}): Sink {
       try {
         const out = opts.out ?? console;
         const text = JSON.stringify(line);
-        if (line.level === "error") out.error(text);
-        else if (line.level === "warn") out.warn(text);
+        if (line.level === 'error') out.error(text);
+        else if (line.level === 'warn') out.warn(text);
         else out.log(text);
       } catch {
         // never throw on the request path
@@ -81,12 +72,10 @@ export interface HttpSinkOptions {
   maxQueue?: number;
   /** Also write every line to the console (default true). */
   console?: boolean;
-  out?: ConsoleSinkOptions["out"];
+  out?: ConsoleSinkOptions['out'];
 }
 
-export function httpSink(
-  opts: HttpSinkOptions = {},
-): Sink & { queued(): number } {
+export function httpSink(opts: HttpSinkOptions = {}): Sink & { queued(): number } {
   // With no waitUntil the runtime may freeze the instance right after the response, so the timer flush is
   // best-effort. Callers MUST call logger.flush() from waitUntil/after() at end of request in that case.
   const flushSize = opts.flushSize ?? 50;
@@ -114,41 +103,33 @@ export function httpSink(
     }
   };
 
-  async function postChunk(
-    chunk: LogLine[],
-    body: string,
-    budgetMs: number,
-  ): Promise<void> {
-    const f = opts.fetch ?? (typeof fetch === "function" ? fetch : undefined);
+  async function postChunk(chunk: LogLine[], body: string, budgetMs: number): Promise<void> {
+    const f = opts.fetch ?? (typeof fetch === 'function' ? fetch : undefined);
     if (!opts.url || !f) {
       drops += lostIn(chunk);
       return;
     }
-    const ctrl =
-      typeof AbortController === "function" ? new AbortController() : null;
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     let killer: ReturnType<typeof setTimeout> | null = null;
     try {
-      const req = f(`${opts.url.replace(/\/+$/, "")}/ingest`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-ndjson",
-          authorization: `Bearer ${opts.token ?? ""}`,
-        },
+      const req = f(`${opts.url.replace(/\/+$/, '')}/ingest`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-ndjson', authorization: `Bearer ${opts.token ?? ''}` },
         body,
         signal: ctrl?.signal,
       });
-      const timeout = new Promise<"timeout">((resolve) => {
+      const timeout = new Promise<'timeout'>((resolve) => {
         killer = setTimeout(() => {
           try {
             ctrl?.abort();
           } catch {
             // ignore
           }
-          resolve("timeout");
+          resolve('timeout');
         }, budgetMs);
       });
       const res = await Promise.race([req, timeout]);
-      if (res === "timeout") {
+      if (res === 'timeout') {
         drops += lostIn(chunk);
         // Late rejection of an abandoned request must not become an unhandled rejection.
         (req as Promise<unknown>).catch(() => {});
@@ -186,7 +167,7 @@ export function httpSink(
       }
       const n = byteLength(text) + 1;
       if (chunk.length > 0 && size + n > MAX_POST_BYTES) {
-        groups.push({ lines: chunk, body: parts.join("\n") + "\n" });
+        groups.push({ lines: chunk, body: parts.join('\n') + '\n' });
         chunk = [];
         parts = [];
         size = 0;
@@ -195,8 +176,7 @@ export function httpSink(
       parts.push(text);
       size += n;
     }
-    if (chunk.length > 0)
-      groups.push({ lines: chunk, body: parts.join("\n") + "\n" });
+    if (chunk.length > 0) groups.push({ lines: chunk, body: parts.join('\n') + '\n' });
     for (const g of groups) {
       const left = deadline - Date.now();
       if (left <= 0) drops += lostIn(g.lines);
@@ -224,10 +204,7 @@ export function httpSink(
           const over = queue.length - maxQueue;
           drops += lostIn(queue.splice(0, over));
         }
-        if (
-          queue.length >= flushSize ||
-          (!opts.waitUntil && Date.now() - oldestAt > flushMs)
-        ) {
+        if (queue.length >= flushSize || (!opts.waitUntil && Date.now() - oldestAt > flushMs)) {
           // Without waitUntil, a queue older than flushMs means the timer never ran (instance was frozen): send now.
           hold(flush());
         } else if (timer === null) {
@@ -255,9 +232,7 @@ export function httpSink(
   };
 }
 
-export type SinkConfig =
-  | ({ type: "console" } & ConsoleSinkOptions)
-  | ({ type: "http" } & HttpSinkOptions);
+export type SinkConfig = { type: 'console' } & ConsoleSinkOptions | ({ type: 'http' } & HttpSinkOptions);
 
 export interface LoggerOptions {
   service: Service;
@@ -281,17 +256,15 @@ export interface Logger {
 
 function envDebug(): boolean {
   try {
-    const p = (
-      globalThis as { process?: { env?: Record<string, string | undefined> } }
-    ).process;
-    return p?.env?.SCRY_LOG_DEBUG === "1";
+    const p = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+    return p?.env?.SCRY_LOG_DEBUG === '1';
   } catch {
     return false;
   }
 }
 
 function isSink(s: Sink | SinkConfig): s is Sink {
-  return typeof (s as Sink).write === "function";
+  return typeof (s as Sink).write === 'function';
 }
 
 export function createLogger(options: LoggerOptions): Logger {
@@ -302,32 +275,18 @@ export function createLogger(options: LoggerOptions): Logger {
   let debugOn = false;
   let now: () => Date = () => new Date();
   try {
-    opts = {
-      service: options.service,
-      env: options.env,
-      version: options.version,
-      sink: options.sink,
-      debug: options.debug,
-      now: options.now,
-    };
-    const cfg = opts.sink ?? { type: "console" as const };
-    sink = isSink(cfg)
-      ? cfg
-      : cfg.type === "http"
-        ? httpSink(cfg)
-        : consoleSink(cfg);
-    debugOn =
-      opts.debug === undefined
-        ? envDebug()
-        : opts.debug === true || opts.debug === "1";
-    if (typeof opts.now === "function") now = opts.now;
+    opts = { service: options.service, env: options.env, version: options.version, sink: options.sink, debug: options.debug, now: options.now };
+    const cfg = opts.sink ?? { type: 'console' as const };
+    sink = isSink(cfg) ? cfg : cfg.type === 'http' ? httpSink(cfg) : consoleSink(cfg);
+    debugOn = opts.debug === undefined ? envDebug() : opts.debug === true || opts.debug === '1';
+    if (typeof opts.now === 'function') now = opts.now;
   } catch {
     sink = consoleSink();
   }
 
   function emit(level: Level, msg: unknown, fields?: unknown): void {
     try {
-      if (level === "debug" && !debugOn) return;
+      if (level === 'debug' && !debugOn) return;
       const raw: Record<string, unknown> = {
         ...(isPlain(fields) ? fields : {}),
         v: 1,
@@ -354,21 +313,17 @@ export function createLogger(options: LoggerOptions): Logger {
   }
 
   return {
-    info: (msg, f) => emit("info", msg, f),
-    warn: (msg, f) => emit("warn", msg, f),
-    error: (msg, f) => emit("error", msg, f),
-    debug: (msg, f) => emit("debug", msg, f),
+    info: (msg, f) => emit('info', msg, f),
+    warn: (msg, f) => emit('warn', msg, f),
+    error: (msg, f) => emit('error', msg, f),
+    debug: (msg, f) => emit('debug', msg, f),
     request(fields) {
       try {
-        if (!isPlain(fields)) return emit("info", "request");
+        if (!isPlain(fields)) return emit('info', 'request');
         const { msg, ...rest } = fields as Record<string, unknown>;
         const st = rest.status;
-        const s = typeof st === "number" && Number.isFinite(st) ? st : 0;
-        emit(
-          s >= 500 ? "error" : s >= 400 ? "warn" : "info",
-          typeof msg === "string" ? msg : "request",
-          rest,
-        );
+        const s = typeof st === 'number' && Number.isFinite(st) ? st : 0;
+        emit(s >= 500 ? 'error' : s >= 400 ? 'warn' : 'info', typeof msg === 'string' ? msg : 'request', rest);
       } catch {
         // G4
       }
@@ -384,5 +339,5 @@ export function createLogger(options: LoggerOptions): Logger {
 }
 
 function isPlain(x: unknown): x is Record<string, unknown> {
-  return typeof x === "object" && x !== null;
+  return typeof x === 'object' && x !== null;
 }
