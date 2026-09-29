@@ -92,3 +92,18 @@ describe('validateFirebaseSessionCookie log privacy (audit 2026-09-26 gap 6)', (
     }
   });
 });
+
+describe('validateFirebaseSessionCookie authTime (signout-session-race)', () => {
+  const header = btoa(JSON.stringify({ alg: 'RS256', kid: 'k1' }));
+  const cache = { get: vi.fn(async () => ({ keys: { k1: 'PEM' } })), put: vi.fn() };
+  const run = () => validateFirebaseSessionCookie(`${header}.e30.sig`, 'test-project', cache as any);
+
+  it('returns auth_time, the moment the user signed in', async () => {
+    (jose.jwtVerify as any).mockResolvedValue({ payload: { sub: 'u', auth_time: 900, iat: 950 } });
+    expect((await run()).authTime).toBe(900);
+  });
+  it('falls back to iat when auth_time is absent', async () => {
+    (jose.jwtVerify as any).mockResolvedValue({ payload: { sub: 'u', iat: 950 } });
+    expect((await run()).authTime).toBe(950);
+  });
+});
