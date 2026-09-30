@@ -51,24 +51,39 @@ const HOOKS: Record<string, (s: string) => unknown> = {
   scrubBreadcrumb: (s) => scrubBreadcrumb({ message: s, data: { a: s, list: [s], nested: { deep: { deeper: s } } } }),
 };
 
+// delivery-ops F63: these were absolute-millisecond assertions ("under 50 ms" on
+// 50k-200k char inputs), which is a wall-clock bound in a deploy-gating test (plan.md
+// §8/B2: no timing asserts in deploy-gating tests) and failed the prod deploy job at
+// 12a55fc (53.2 ms) purely from box load, not a regression. The property actually worth
+// guarding is that the scrubbers stay linear (not quadratic-or-worse from catastrophic
+// regex backtracking) as input grows 50k -> 200k (4x). Assert that ratio instead of an
+// absolute bound, plus one generous absolute ceiling as a backstop against a pathological
+// small-input time hiding a real blowup in the ratio.
+const RATIO_CEILING = 10; // linear predicts ~4x; this stays well clear of noise but still
+// catches quadratic-or-worse growth
+const ABS_CEILING_MS = 500; // generous vs. the old 50 ms; still catches a real hang
+
 describe('scrubbers are linear time on hostile input (B2)', () => {
   // warm up JIT and regex compilation so the first case is not charged for it
   for (const hook of Object.values(HOOKS)) hook('warm up http://a?b=c');
 
-  for (const size of [50_000, 200_000]) {
-    for (const [shape, make] of Object.entries(SHAPES)) {
-      for (const [hookName, hook] of Object.entries(HOOKS)) {
-        it(`${hookName} on ${size} chars of ${shape} takes under 50 ms`, () => {
-          const input = make(size);
-          const ms = Math.min(time(() => hook(input)), time(() => hook(input)));
-          expect(ms).toBeLessThan(50);
-        });
-      }
+  for (const [shape, make] of Object.entries(SHAPES)) {
+    for (const [hookName, hook] of Object.entries(HOOKS)) {
+      it(`${hookName} on ${shape} stays roughly linear from 50k to 200k chars`, () => {
+        const small = make(50_000);
+        const large = make(200_000);
+        // best-of-2 per size to damp scheduler jitter, same as before; floor the
+        // denominator so a near-zero small-input time can't inflate the ratio
+        const tSmall = Math.max(0.05, Math.min(time(() => hook(small)), time(() => hook(small))));
+        const tLarge = Math.min(time(() => hook(large)), time(() => hook(large)));
+        expect(tLarge / tSmall).toBeLessThan(RATIO_CEILING);
+        expect(tLarge).toBeLessThan(ABS_CEILING_MS);
+      });
     }
   }
 
-  it("the reviewer's case: 'http://a' x 25000 (200k chars) scrubs in under 50 ms", () => {
-    expect(time(() => scrubString('http://a'.repeat(25000)))).toBeLessThan(50);
+  it("the reviewer's case: 'http://a' x 25000 (200k chars) scrubs well under a real hang", () => {
+    expect(time(() => scrubString('http://a'.repeat(25000)))).toBeLessThan(ABS_CEILING_MS);
   });
 
   it('caps every scrubbed string before scrubbing', () => {
