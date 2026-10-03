@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { growth } from './test-support/growth';
 import { MAX_SCRUB_CHARS, scrubBreadcrumb, scrubEvent, scrubSpan, scrubString, scrubTransaction } from '../src/sentry-scrub';
 
 // log-standardization D3 (B2 + fail-closed + latent items). Keep this file identical in the upload,
-// build-processing and cdn repos apart from the import path above.
+// build-processing and cdn repos apart from the import paths above (and ./test-support/growth.ts, the
+// ratio helper, which is copied with it). No absolute-millisecond assertions here (ledger F147, F158).
 
 const SHAPES: Record<string, (n: number) => string> = {
   'http://a repeats': (n) => 'http://a'.repeat(Math.ceil(n / 8)),
@@ -20,12 +22,6 @@ const SHAPES: Record<string, (n: number) => string> = {
   'eyJ runs': (n) => 'eyJ'.repeat(Math.ceil(n / 3)),
   'scry_proj runs': (n) => 'scry_proj_'.repeat(Math.ceil(n / 10)),
 };
-
-function time(fn: () => unknown): number {
-  const t = performance.now();
-  fn();
-  return performance.now() - t;
-}
 
 const HOOKS: Record<string, (s: string) => unknown> = {
   scrubString: (s) => scrubString(s),
@@ -51,17 +47,17 @@ const HOOKS: Record<string, (s: string) => unknown> = {
   scrubBreadcrumb: (s) => scrubBreadcrumb({ message: s, data: { a: s, list: [s], nested: { deep: { deeper: s } } } }),
 };
 
-// delivery-ops F63: these were absolute-millisecond assertions ("under 50 ms" on
-// 50k-200k char inputs), which is a wall-clock bound in a deploy-gating test (plan.md
-// §8/B2: no timing asserts in deploy-gating tests) and failed the prod deploy job at
-// 12a55fc (53.2 ms) purely from box load, not a regression. The property actually worth
-// guarding is that the scrubbers stay linear (not quadratic-or-worse from catastrophic
-// regex backtracking) as input grows 50k -> 200k (4x). Assert that ratio instead of an
-// absolute bound, plus one generous absolute ceiling as a backstop against a pathological
-// small-input time hiding a real blowup in the ratio.
-const RATIO_CEILING = 10; // linear predicts ~4x; this stays well clear of noise but still
-// catches quadratic-or-worse growth
-const ABS_CEILING_MS = 500; // generous vs. the old 50 ms; still catches a real hang
+// Inputs of SMALL..MAX_SCRUB_CHARS chars exercise the rules themselves (the cap leaves them whole), so a
+// quadratic rule shows up as ~64x cost for 8x input and a linear one as ~8x (9.6x worst case measured
+// at box load ~155, see test-support/growth.ts). The bound sits at 2x the linear expectation: 1.7x clear
+// of the worst linear reading, and low enough that a weak quadratic (n^2/64 work) still fails the
+// cheap shapes (17 of 70 cases at 16; 4 at the old 24). HUGE chars is far past the cap: it must cost
+// about the same as MAX_SCRUB_CHARS.
+const SMALL = 512;
+const TEST_TIMEOUT_MS = 60_000; // generous: nothing here asserts a duration, but each case takes seconds under load
+const HUGE = 200_000;
+const LINEAR_BOUND = 16; // for MAX_SCRUB_CHARS / SMALL = 8x the input
+const CAP_BOUND = 12; // HUGE / MAX_SCRUB_CHARS ~ 49x the input must not cost anywhere near 49x
 
 describe('scrubbers are linear time on hostile input (B2)', () => {
   // warm up JIT and regex compilation so the first case is not charged for it
@@ -69,22 +65,20 @@ describe('scrubbers are linear time on hostile input (B2)', () => {
 
   for (const [shape, make] of Object.entries(SHAPES)) {
     for (const [hookName, hook] of Object.entries(HOOKS)) {
-      it(`${hookName} on ${shape} stays roughly linear from 50k to 200k chars`, () => {
-        const small = make(50_000);
-        const large = make(200_000);
-        // best-of-2 per size to damp scheduler jitter, same as before; floor the
-        // denominator so a near-zero small-input time can't inflate the ratio
-        const tSmall = Math.max(0.05, Math.min(time(() => hook(small)), time(() => hook(small))));
-        const tLarge = Math.min(time(() => hook(large)), time(() => hook(large)));
-        expect(tLarge / tSmall).toBeLessThan(RATIO_CEILING);
-        expect(tLarge).toBeLessThan(ABS_CEILING_MS);
-      });
+      it(`${hookName} on ${shape}: time grows linearly with input size, and the cap bounds huge input`, () => {
+        const linear = growth(hook, make, SMALL, MAX_SCRUB_CHARS, LINEAR_BOUND);
+        expect(linear, `${MAX_SCRUB_CHARS / SMALL}x input took ${linear.toFixed(1)}x time (quadratic would be ~64x)`).toBeLessThan(LINEAR_BOUND);
+        const capped = growth(hook, make, MAX_SCRUB_CHARS, HUGE, CAP_BOUND);
+        expect(capped, `${HUGE / MAX_SCRUB_CHARS}x input took ${capped.toFixed(1)}x time (the cap should make it ~1x)`).toBeLessThan(CAP_BOUND);
+      }, TEST_TIMEOUT_MS);
     }
   }
 
-  it("the reviewer's case: 'http://a' x 25000 (200k chars) scrubs well under a real hang", () => {
-    expect(time(() => scrubString('http://a'.repeat(25000)))).toBeLessThan(ABS_CEILING_MS);
-  });
+  it("the reviewer's case: 'http://a' x 25000 (200k chars) costs about what a capped string costs", () => {
+    const hook = (s: string) => scrubString(s);
+    const make = (n: number) => 'http://a'.repeat(Math.ceil(n / 8));
+    expect(growth(hook, make, MAX_SCRUB_CHARS, 200_000, CAP_BOUND)).toBeLessThan(CAP_BOUND);
+  }, TEST_TIMEOUT_MS);
 
   it('caps every scrubbed string before scrubbing', () => {
     expect(scrubString('a'.repeat(200_000)).length).toBeLessThanOrEqual(MAX_SCRUB_CHARS + 64);
