@@ -363,6 +363,8 @@ R2_SECRET_ACCESS_KEY=your-secret-key
 - Enables testing the partial ZIP flow outside Workers.
 - Shares the same ZIP extraction services used in production.
 
+**Log schema drift check.** The `scry-log-drift` workflow (`scripts/scry-log-drift.sh`) fails a PR when the vendored `src/lib/scry-log/` is ahead of the stage log store ("deploy logs-service first"), warns when behind, and passes with a warning if the stage `/healthz` cannot be read; refresh the copy with `scry-management/lib/scry-log/sync.sh <repo>`.
+
 ## Testing
 
 ### Unit Tests
